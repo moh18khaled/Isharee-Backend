@@ -26,7 +26,7 @@ const userSchema = new mongoose.Schema(
             minLowercase: 1,
             minUppercase: 1,
             minNumbers: 1,
-            minSymbols: 1,
+            minSymbols: 0,
           }),
         message:
           "Password must contain at least one lowercase, one uppercase, one number, and one special character.",
@@ -59,10 +59,7 @@ const userSchema = new mongoose.Schema(
         255,
         "Profile picture URL should be less than 256 characters.",
       ],
-      validate: {
-        validator: (value) => validator.isURL(value),
-        message: "Profile picture URL is invalid.",
-      },
+      default:"uploads/profile_photo.jpg",
     },
     eWallet: {
       amount: { type: Number, default: 0 },

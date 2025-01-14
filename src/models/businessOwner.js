@@ -26,6 +26,7 @@ const businessOwnerSchema = new mongoose.Schema({
     required: true,
     minlength: [3, "Business name must be at least 3 characters long."],
     maxlength: [100, "Business name cannot exceed 100 characters."],
+    unique: true,
   },
   businessType: {
     type: String,

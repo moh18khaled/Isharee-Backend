@@ -2,23 +2,25 @@ const express = require("express");
 const dotenv = require("dotenv");
 const mongoose = require("mongoose");
 const userRoutes = require("./routes/userRoutes");
+const businessOwnerRoutes = require("./routes/businessOwnerRoutes");
 const cors = require("cors");
-const bodyParser = require("body-parser");
 const AppError = require("./utils/AppError");
+const path = require("path");
 const rateLimit = require("express-rate-limit");
 const globalError = require("./middlewares/globalError");
 const helmet = require("helmet");
 const compression = require("compression");
 const morgan = require("morgan");
 
+
 const app = express();
 
-app.use(bodyParser.json());
+app.use(express.json());
 
 app.use(
   cors({
     origin: process.env.CLIENT_URL,
-    methods: ["POST", "GET", "PUT", "DELETE"],
+    methods: ["POST", "GET", "PUT", "DELETE","PATCH"],
     allowedHeaders: ["Content-Type"],
   })
 );
@@ -48,6 +50,9 @@ dotenv.config();
 // Use express.json() to parse JSON request bodies
 app.use(express.json());
 
+// For profile photos
+app.use('/uploads',express.static(path.join(__dirname,'uploads')));
+
 // MongoDB connection
 mongoose
   .connect(process.env.MONGODB_URI)
@@ -58,20 +63,21 @@ mongoose
     console.error("Failed to connect to MongoDB:", err.message);
   });
 
-// Handle any invalid route
-app.all("*", (req, res, next) => {
-  next(new AppError("Cannot find this route", 404));
-});
-
-// Global error Handling middleware
-app.use(globalError);
-
 // Use routes
 app.use("/user", userRoutes);
+app.use("/businessOwner", businessOwnerRoutes);
 
 // Routes setup
 app.get("/", (req, res) => {
   res.send("Welcome to the iSharee Backend!");
+});
+
+// Error Handling Middleware
+app.use(globalError);
+
+// Handle any invalid route
+app.all("*", (req, res, next) => {
+  next(new AppError("Cannot find this route", 404));
 });
 
 module.exports = app;
