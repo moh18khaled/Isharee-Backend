@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const userRoutes = require("./routes/userRoutes");
 const businessOwnerRoutes = require("./routes/businessOwnerRoutes");
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
 const AppError = require("./utils/AppError");
 const path = require("path");
 const rateLimit = require("express-rate-limit");
@@ -12,15 +13,14 @@ const helmet = require("helmet");
 const compression = require("compression");
 const morgan = require("morgan");
 
-
 const app = express();
-
 app.use(express.json());
+app.use(cookieParser());
 
 app.use(
   cors({
     origin: process.env.CLIENT_URL,
-    methods: ["POST", "GET", "PUT", "DELETE","PATCH"],
+    methods: ["POST", "GET", "PUT", "DELETE", "PATCH"],
     allowedHeaders: ["Content-Type"],
   })
 );
@@ -51,7 +51,7 @@ dotenv.config();
 app.use(express.json());
 
 // For profile photos
-app.use('/uploads',express.static(path.join(__dirname,'uploads')));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // MongoDB connection
 mongoose
@@ -72,12 +72,13 @@ app.get("/", (req, res) => {
   res.send("Welcome to the iSharee Backend!");
 });
 
-// Error Handling Middleware
-app.use(globalError);
 
 // Handle any invalid route
 app.all("*", (req, res, next) => {
   next(new AppError("Cannot find this route", 404));
 });
+
+// Error Handling Middleware
+app.use(globalError);
 
 module.exports = app;

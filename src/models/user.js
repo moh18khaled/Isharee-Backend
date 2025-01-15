@@ -1,7 +1,13 @@
 const mongoose = require("mongoose");
 const validator = require("validator"); // Import validator.js
 const bcrypt = require("bcryptjs");
-const sendError = require("../utils/sendError");
+
+const refreshTokenSchema = new mongoose.Schema({
+  token: { type: String, required: true },
+  issuedAt: { type: Date, default: Date.now },
+  expiresAt: { type: Date, required: true },
+});
+
 const userSchema = new mongoose.Schema(
   {
     username: {
@@ -59,7 +65,7 @@ const userSchema = new mongoose.Schema(
         255,
         "Profile picture URL should be less than 256 characters.",
       ],
-      default:"uploads/profile_photo.jpg",
+      default: "uploads/profile_photo.jpg",
     },
     eWallet: {
       amount: { type: Number, default: 0 },
@@ -74,6 +80,7 @@ const userSchema = new mongoose.Schema(
         },
       },
     },
+    refreshTokens: [refreshTokenSchema],
     uploadedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
     likedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
     followingUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],

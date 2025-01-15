@@ -8,7 +8,12 @@ const errorMessages = {
   },
   401: {
     default: "Unauthorized. Please log in again.",
+    token:"token expired. Please log in again.",
     currentPassword: "Current password is incorrect.",
+  },
+  403: {
+    default: "Forbidden.",
+    notAuthenticated: "This role is not authorized to perform this action",
   },
   404: {
     default: "Not found.",

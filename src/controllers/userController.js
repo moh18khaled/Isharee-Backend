@@ -1,5 +1,6 @@
 const User = require("../models/user");
 const sendError = require("../utils/sendError");
+const generateAndSetTokens = require("../utils/generateAndSetTokens");
 
 // User signup
 exports.signup = async (req, res, next) => {
@@ -18,6 +19,9 @@ exports.signup = async (req, res, next) => {
 
   await newUser.save();
 
+  // Generate and set tokens
+  await generateAndSetTokens(newuser, res);
+  
   return res.status(201).json({
     message: "User successfully registered",
     data: {
@@ -43,6 +47,9 @@ exports.login = async (req, res, next) => {
   const isMatch = await user.comparePassword(password);
 
   if (!isMatch) return next(sendError(401));
+
+  // Generate and set tokens
+  await generateAndSetTokens(user, res);
 
   return res.status(200).json({
     message: "User successfully logged In",

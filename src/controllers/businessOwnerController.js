@@ -1,10 +1,21 @@
 const BusinessOwner = require("../models/businessOwner");
 const User = require("../models/user");
-const sendError = require("../utils/sendError");
 const mongoose = require("mongoose");
+const sendError = require("../utils/sendError");
+const generateAndSetTokens = require("../utils/generateAndSetTokens");
 
 exports.signup = async (req, res, next) => {
-  const { username, email, password, age, businessName, businessType, address, phoneNumber, description } = req.body;
+  const {
+    username,
+    email,
+    password,
+    age,
+    businessName,
+    businessType,
+    address,
+    phoneNumber,
+    description,
+  } = req.body;
 
   const oldUser = await User.findOne({ email });
   if (oldUser) {
@@ -40,9 +51,15 @@ exports.signup = async (req, res, next) => {
   await session.commitTransaction();
   session.endSession();
 
+  // Generate and set tokens
+  await generateAndSetTokens(newuser, res);
+
   res.status(201).json({
     message: "Business owner registered successfully.",
     user: { id: newUser._id, username: newUser.username },
-    businessOwner: { id: newBusinessOwner._id, businessName: newBusinessOwner.businessName },
+    businessOwner: {
+      id: newBusinessOwner._id,
+      businessName: newBusinessOwner.businessName,
+    },
   });
 };
