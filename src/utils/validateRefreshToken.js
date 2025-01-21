@@ -3,12 +3,12 @@ const bcrypt = require("bcrypt");
 
 validateRefreshToken = asyncHandler(async (cookieToken, user) => {
   // Filter out expired tokens
-  const validTokens = user.refreshTokens.filter((refreshToken) => {
-    return new Date() < new Date(refreshToken.expiresAt);
-  });
+  const validTokens = user.refreshTokens.filter(
+    (refreshToken) => new Date() < new Date(refreshToken.expiresAt)
+  );
 
   // Update the user's refreshTokens array in the database
-  if (validTokens.length !== user.refreshTokens.length) {
+  if (validTokens.length < user.refreshTokens.length) {
     user.refreshTokens = validTokens;
     await user.save(); // Save only if there are changes
   }

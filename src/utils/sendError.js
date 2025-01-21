@@ -9,7 +9,8 @@ const errorMessages = {
   401: {
     default: "Unauthorized. Please log in again.",
     token:"token expired. Please log in again.",
-    currentPassword: "Current password is incorrect.",
+    currentPassword: "Password is incorrect.",
+    Invalidcardinalities: "Invalid email or password. Please try again.",
   },
   403: {
     default: "Forbidden.",
@@ -20,11 +21,13 @@ const errorMessages = {
     user: "User not found.",
     resource: "Resource not found.",
     products: "No products found.",
+    Photo : "Photo not found",
   },
   409: {
     default: "Conflict.",
-    userExists: "User already exists.",
-    emailExists: "Email already exists.",
+    userExists: "Email or username already in use",
+    InvalidCredentials:"Invalid credentials or data",
+    businessOwnerExists: "Email , username or businessName already in use",
   },
   500: {
     default: "Conflict.",

@@ -17,14 +17,18 @@ exports.signup = async (req, res, next) => {
     description,
   } = req.body;
 
-  const oldUser = await User.findOne({ email });
-  if (oldUser) {
-    return next(sendError(409, "userExists"));
-  }
-
   // Start a database transaction
   const session = await mongoose.startSession();
+  
   session.startTransaction();
+
+  const oldUser= await User.findOne({$or:[{email},{username}]}).session(session);
+  const oldBusinessOwner = await BusinessOwner.findOne({businessName}).session(session);
+  if (oldBusinessOwner||oldUser) {
+    await session.abortTransaction();
+    session.endSession();
+    return next(sendError(409, "businessOwnerExists"));
+  }
 
   // Step 1: Create User
   const newUser = new User({
@@ -32,7 +36,7 @@ exports.signup = async (req, res, next) => {
     email,
     password,
     age,
-    role: "business man",
+    role: "businessOwner",
   });
   await newUser.save({ session });
 
@@ -52,7 +56,7 @@ exports.signup = async (req, res, next) => {
   session.endSession();
 
   // Generate and set tokens
-  await generateAndSetTokens(newuser, res);
+  await generateAndSetTokens(newUser, res);
 
   res.status(201).json({
     message: "Business owner registered successfully.",

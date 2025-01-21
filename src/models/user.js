@@ -32,7 +32,7 @@ const userSchema = new mongoose.Schema(
             minLowercase: 1,
             minUppercase: 1,
             minNumbers: 1,
-            minSymbols: 0,
+            minSymbols: 1,
           }),
         message:
           "Password must contain at least one lowercase, one uppercase, one number, and one special character.",
@@ -56,7 +56,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["user", "business man"],
+      enum: ["user", "businessOwner"],
       default: "user",
     },
     profilePicture: {
@@ -65,7 +65,7 @@ const userSchema = new mongoose.Schema(
         255,
         "Profile picture URL should be less than 256 characters.",
       ],
-      default: "uploads/profile_photo.jpg",
+      default: "profilePicture.jpg",
     },
     eWallet: {
       amount: { type: Number, default: 0 },

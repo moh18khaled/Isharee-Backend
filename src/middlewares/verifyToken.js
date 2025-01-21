@@ -3,17 +3,28 @@ const setCookie = require("../utils/setCookie");
 const generateJWT = require("../utils/generateJWT");
 const validateRefreshToken = require("../utils/validateRefreshToken");
 const sendError = require("../utils/sendError");
-const verifyJWT = require("../utils/verifyJWT")
+const verifyJWT = require("../utils/verifyJWT");
+const markAsLoggedIn = require("../utils/markAsLoggedIn");
 
-const verifyToken = async (req, res, next) => {
+const verifyToken = async (
+  req,
+  res,
+  next,
+  skipAccessTokenGeneration = false
+) => {
   const access_token = req.cookies.access_token;
 
   const refresh_token = req.cookies.refresh_token;
 
   if (!access_token) {
     // If no access token
-    if (!refresh_token) return next(sendError(401));
-
+    if (!refresh_token) {
+      // No access token and no refresh token means it's a first-time login attempt
+      if(skipAccessTokenGeneration)
+        return next();
+        
+      return next(sendError(401));
+    }
     try {
       const decodedRefreshToken = verifyJWT(refresh_token);
 
@@ -25,20 +36,23 @@ const verifyToken = async (req, res, next) => {
 
       if (!isValid) return next(sendError(401));
 
-      // Generate new access token
-      const accessToken = await generateJWT(
-        {
-          email: decodedRefreshToken.email,
-          id: decodedRefreshToken.id,
-          role: decodedRefreshToken.role,
-        },
-        "5m"
-      );
-
+      // Check if the user tries to login again
+      if (skipAccessTokenGeneration) {
+        return markAsLoggedIn(req, next);
+      } else {
+        // Generate new access token
+        const accessToken = await generateJWT(
+          {
+            email: decodedRefreshToken.email,
+            id: decodedRefreshToken.id,
+            role: decodedRefreshToken.role,
+          },
+          "5m"
+        );
+        setCookie(res, "access_token", accessToken, 5 * 60 * 1000);
+      }
       // Attach user details to the request
       req.user = decodedRefreshToken;
-
-      setCookie(res, "access_token", accessToken, 5 * 60 * 1000);
     } catch (err) {
       if (err.name === "TokenExpiredError") {
         return next(sendError(401, "token")); // Specific message for expired token
@@ -48,6 +62,11 @@ const verifyToken = async (req, res, next) => {
   } else {
     try {
       const decodedAccessToken = verifyJWT(access_token);
+
+      // If the user tries to login again
+      if (skipAccessTokenGeneration) {
+        return markAsLoggedIn(req, next);
+      }
 
       req.user = decodedAccessToken;
     } catch (err) {
