@@ -17,12 +17,17 @@ const app = express();
 app.use(express.json());
 app.use(cookieParser());
 
-app.use(cors({
-  origin: "http://localhost:5173", // Replace with your frontend URL
-  methods: ["GET", "POST", "PUT", "DELETE","PATCH", "OPTIONS"], // Allowed HTTP methods
-  allowedHeaders: ["Content-Type", "Authorization"], // Headers your client sends
-  credentials: true, // Allow credentials (cookies, authorization headers)
-}));
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173", // Local development
+      "https://ishare-production-50fb.up.railway.app", // Deployed frontend
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"], // Allowed HTTP methods
+    allowedHeaders: ["Content-Type", "Authorization"], // Headers your client sends
+    credentials: true, // Allow credentials (cookies, authorization headers)
+  })
+);
 
 // Handle OPTIONS requests for all routes
 // app.options("*", (req, res) => {
