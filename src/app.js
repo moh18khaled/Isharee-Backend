@@ -20,14 +20,12 @@ const seedCategories = require('./seedCategories');
 const app = express();
 
 
-// Serve React static files
-app.use(express.static(path.join(__dirname, "client/dist")));
+const clientBuildPath = path.resolve("src/client/dist");
+app.use(express.static(clientBuildPath));
 
-// Catch-all route to serve React app (for React Router support)
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "client/dist", "index.html"));
+  res.sendFile(path.join(clientBuildPath, "index.html"));
 });
-
 
 app.use(express.json());
 app.use(cookieParser());
