@@ -20,7 +20,7 @@ const seedCategories = require('./seedCategories');
 const app = express();
 
 
-const clientBuildPath = path.resolve("src/client/dist");
+const clientBuildPath = path.resolve("../../client/dist");
 app.use(express.static(clientBuildPath));
 
 app.get("*", (req, res) => {
