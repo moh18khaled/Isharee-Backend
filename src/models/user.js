@@ -47,6 +47,7 @@ const userSchema = new mongoose.Schema(
         message: "Please provide a valid email address.",
       },
     },
+    isVerified: { type: Boolean, default: false }, 
     age: { type: Number, required: true },
     ageGroup: {
       // The added age group field
@@ -60,12 +61,19 @@ const userSchema = new mongoose.Schema(
       default: "user",
     },
     profilePicture: {
-      type: String,
-      maxlength: [
-        255,
-        "Profile picture URL should be less than 256 characters.",
-      ],
-      default: "profilePicture.jpg",
+      url: {
+        type: String,
+        maxlength: [
+          255,
+          "Profile picture URL should be less than 256 characters.",
+        ],
+        default:
+          "https://res.cloudinary.com/dknokwido/image/upload/v1737968225/profilePicture/tdnvzliie0wty93ihodf.jpg",
+      },
+      public_id: {
+        type: String,
+        default: "profilePicture/tdnvzliie0wty93ihodf",
+      },
     },
     eWallet: {
       amount: { type: Number, default: 0 },
@@ -81,9 +89,9 @@ const userSchema = new mongoose.Schema(
       },
     },
     refreshTokens: [refreshTokenSchema],
-    uploadedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
+    posts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
     likedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
-    followingUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    following: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     followers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   {

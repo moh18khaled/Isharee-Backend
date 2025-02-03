@@ -3,6 +3,7 @@ const dotenv = require("dotenv");
 const mongoose = require("mongoose");
 const userRoutes = require("./routes/userRoutes");
 const businessOwnerRoutes = require("./routes/businessOwnerRoutes");
+const postRoutes = require("./routes/postRoutes");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const AppError = require("./utils/AppError");
@@ -12,8 +13,22 @@ const globalError = require("./middlewares/globalError");
 const helmet = require("helmet");
 const compression = require("compression");
 const morgan = require("morgan");
+const { initializeSocket } = require('./utils/socket');
+const seedCategories = require('./seedCategories');
+
 
 const app = express();
+
+
+// Serve React static files
+app.use(express.static(path.join(__dirname, "client/dist")));
+
+// Catch-all route to serve React app (for React Router support)
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "client/dist", "index.html"));
+});
+
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -28,15 +43,6 @@ app.use(
     credentials: true, // Allow credentials (cookies, authorization headers)
   })
 );
-
-// Handle OPTIONS requests for all routes
-// app.options("*", (req, res) => {
-//   res.header("Access-Control-Allow-Origin", "http://localhost:5173");
-//   res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-//   res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
-//   res.header("Access-Control-Allow-Credentials", "true");
-//   res.sendStatus(200);
-// });
 
 // Use the 'dev' logging format
 app.use(morgan("dev"));
@@ -65,7 +71,7 @@ dotenv.config();
 // Use express.json() to parse JSON request bodies
 app.use(express.json());
 
-// For profile photos
+// For photos
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // MongoDB connection
@@ -78,15 +84,16 @@ mongoose
     console.error("Failed to connect to MongoDB:", err.message);
   });
 
+//  seedCategories();
 // Use routes
 app.use("/user", userRoutes);
 app.use("/businessOwner", businessOwnerRoutes);
+app.use("/posts", postRoutes);
 
 // Routes setup
 app.get("/", (req, res) => {
   res.send("Welcome to the iSharee Backend!");
 });
-
 
 // Handle any invalid route
 app.all("*", (req, res, next) => {

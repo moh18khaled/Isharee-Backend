@@ -1,6 +1,15 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const app = require('./src/app');
+const http = require('http'); 
+
+/*const initializeSocket = require("./src/utils/socket");  // Your socket utility file
+
+
+const server = http.createServer(app);
+// Initialize Socket.IO with the server
+initializeSocket(server);
+*/
 
 // Load environment variables
 dotenv.config();
