@@ -41,7 +41,7 @@ exports.signup = async (req, res, next) => {
 
   const verificationToken = await generateJWT({ id: newUser.id }, "1h");
 
-  const verificationLink = `${process.env.LOCAL_URL}/user/verify-email?token=${verificationToken}`;
+  const verificationLink = `${process.env.CLIENT_URL}/verify-account?token=${verificationToken}`;
 
   await sendEmail(
     email,

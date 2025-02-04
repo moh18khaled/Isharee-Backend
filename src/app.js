@@ -13,18 +13,16 @@ const globalError = require("./middlewares/globalError");
 const helmet = require("helmet");
 const compression = require("compression");
 const morgan = require("morgan");
-const { initializeSocket } = require('./utils/socket');
-const seedCategories = require('./seedCategories');
-
+const { initializeSocket } = require("./utils/socket");
+const seedCategories = require("./seedCategories");
 
 const app = express();
 
+app.use(express.static(path.join(__dirname, "client", "dist")));
 
-const clientBuildPath = path.resolve("../../client/dist");
-app.use(express.static(clientBuildPath));
-
+//Serve index.html for all routes
 app.get("*", (req, res) => {
-  res.sendFile(path.join(clientBuildPath, "index.html"));
+  res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
 });
 
 app.use(express.json());

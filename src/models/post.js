@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const postSchema = new mongoose.Schema(
   {
-    title: { type: String, required: true },
+    //title: { type: String, required: true },
     author: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -28,13 +28,13 @@ const postSchema = new mongoose.Schema(
         type: String,
       },
     },
-    categories: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Category", // Reference to the Category model
-        required: true,
-      },
-    ],
+    // categories: [
+    //   {
+    //     type: mongoose.Schema.Types.ObjectId,
+    //     ref: "Category", // Reference to the Category model
+    //     required: true,
+    //   },
+    // ],
     likes: [
       {
         type: mongoose.Schema.Types.ObjectId,

@@ -12,86 +12,49 @@ const cloudinaryDelete = require("../utils/cloudinaryDelete");
 
 // Add new post
 exports.addPost = async (req, res, next) => {
-  const userId = req.user?.id;
+  const user = await validateUser(req, next);
 
-  if (!userId) return next(sendError(404, "user"));
-
-  const { title, content, categories } = req.body;
-
-  // Fetch the categories by name
-  const categoryDocs = await Category.find({
-    name: { $in: categories }, // Look for categories where the name is in the categories array
-  });
-
-  if (categoryDocs.length !== categories.length) {
-    return next(sendError(400, "invalidCategories"));
-  }
-
-  // Map category names to category IDs
-  const categoryIds = categoryDocs.map((cat) => cat._id);
-
-  // Ensure image file exists
-  if (!req.files?.image || req.files.image.length === 0) {
+  const { text, imageUrl, imagePublicId, videoUrl, videoPublicId } = req.body;
+  if (!imageUrl || !imagePublicId) {
     return next(sendError(400, "imageRequired"));
   }
-
-  const imagePath = req.files.image[0].path; // Get the image path
-  const imageResult = await cloudinaryUpload(imagePath, "postPicture", "image");
-
   const image = {
-    url: imageResult.url,
-    public_id: imageResult.public_id,
+    url: imageUrl,
+    public_id: imagePublicId,
   };
-
-  // Delete the local image file after upload
-  fs.unlinkSync(imagePath);
-
-  // Handle video upload (if a video file is present)
-  let video = null;
-  if (req.files.video) {
-    const videoPath = req.files.video[0].path;
-    const videoResult = await cloudinaryUpload(videoPath, "postVideo", "video");
-
-    video = {
-      url: videoResult.url,
-      public_id: videoResult.public_id,
-    };
-
-    // Delete the local video file after upload
-    fs.unlinkSync(videoPath);
-  }
+  const video = {
+    url: videoUrl,
+    public_id: videoPublicId,
+  };
 
   // Create the post
   const post = new Post({
-    title,
-    author: userId,
-    content,
+    //title,
+    author: user._id,
+    content:text,
     image,
-    categories: categoryIds, // Use category IDs here
     ...(video && { video }), // Add video only if it exists
   });
 
-  // Link post to categories
-  categoryDocs.forEach((category) => category.posts.push(post._id));
+
 
   // Save the post and update user data in parallel
-  const user = await User.findById(userId);
-  if (!user) return next(sendError(404, "user"));
 
   user.posts.push(post._id);
 
-  await Promise.all([post.save(), user.save(),...categoryDocs.map((category) => category.save()),
+  await Promise.all([
+    post.save(),
+    user.save(),
   ]);
+  console.log(req.body);
 
   return res.status(200).json({
     message: "Post added successfully",
     data: {
-      title,
-      author: userId,
-      content,
+      author: user,
+      content:text,
       image,
       video: video || null,
-      categories: categoryIds,
     },
   });
 };

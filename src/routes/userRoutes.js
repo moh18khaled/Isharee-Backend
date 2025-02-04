@@ -26,7 +26,7 @@ router
   .route("/account")
   .get(verifyToken, asyncHandler(userController.getAccountData))
   .patch(
-    verifyToken,
+    verifyToken, 
     upload.single("profilePicture"),
     asyncHandler(userController.updateAccount)
   )

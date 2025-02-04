@@ -10,6 +10,7 @@ const verifyToken = async (req, res, next) => {
 
   const refresh_token = req.cookies.refresh_token;
 
+
   if (!access_token) {
     // If no access token
     if (!refresh_token) {
