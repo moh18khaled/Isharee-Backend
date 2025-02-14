@@ -7,7 +7,7 @@ const requiredFieldsByEntity = {
     "username", "email", "password", "age",
     "businessName", "categories", "address", "phoneNumber"
   ],
-  post: ["title", "text", "imageUrl", "imagePublicId", "businessName", "rating"],
+  post: ["title", "content", "imageUrl", "imagePublicId", "businessName", "rating"],
   emailContent: ["name", "email", "subject", "message"],
 };
 
@@ -17,6 +17,7 @@ const requiredFieldsByEntity = {
 const validateRequiredFields = (entityType) => {
   return (req, res, next) => {
 
+    console.log(req.body);
     const requiredFields = requiredFieldsByEntity[entityType];
 
     // Check for missing fields

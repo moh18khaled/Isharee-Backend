@@ -14,10 +14,15 @@ const cloudinaryDelete = require("../utils/cloudinaryDelete");
 // Add new post
 exports.addPost = async (req, res, next) => {
   const user = await validateUser(req, next);
+  const userRole = req.user?.role;
 
+  if(req.user?.role==="businessOwner"){
+    return next(sendError(403, "isBusinessOwner"));
+
+  }
   const {
     title,
-    text,
+    content,
     imageUrl,
     imagePublicId,
     videoUrl,
@@ -30,11 +35,11 @@ exports.addPost = async (req, res, next) => {
   const video = videoUrl ? { url: videoUrl, public_id: videoPublicId } : null;
 
   const businessOwner = await BusinessOwner.findOne({
-    businessName: businessName.toLowerCase(),
+    businessName: { $regex: businessName, $options: 'i' }
   });
 
   if (!businessOwner) {
-    return res.status(404).json({ message: "BusinessName" });
+    return next(sendError(404, "BusinessName"));
   }
 
   const session = await mongoose.startSession();
@@ -48,7 +53,7 @@ exports.addPost = async (req, res, next) => {
   const post = new Post({
     title,
     author: user._id,
-    content: text,
+    content,
     image,
     ...(video && { video }), // Add video only if it exists
     businessOwner: businessOwner._id,
@@ -81,8 +86,8 @@ exports.addPost = async (req, res, next) => {
   return res.status(200).json({
     message: "Post added successfully",
     data: {
-      author: user,
-      content: text,
+      author: user._id,
+      content,
       image,
       video: video || null,
       businessOwner: businessOwner._id,
@@ -158,8 +163,16 @@ exports.getPost = async (req, res, next) => {
 
   const post = await Post.findById(id)
     .populate("author", "username profilePicture")
-    .populate("comments", "user text createdAt");
-  if (!post) return next(sendError(404, "post"));
+    .populate("comments", "user text createdAt")
+    .populate({
+      path: "businessOwner",
+      select: "user_id",
+      populate: {
+        path: "user_id",
+        select: "username profilePicture"
+      }
+    });
+      if (!post) return next(sendError(404, "post"));
 
   // Convert to plain JavaScript object after population
   const plainPost = post.toObject();
@@ -181,7 +194,13 @@ exports.getPost = async (req, res, next) => {
     return next(sendError(404, "post"));
   }
 
-  // Check if the current user is the owner
+  if (isUser) {
+    // Update post by adding user ID to viewedBy array (prevents duplicates)
+    await Post.updateOne(
+      { _id: post._id },
+      { $addToSet: { viewedBy: userId } } // Ensures unique entries
+    );
+  }
 
   return res.status(200).json({
     message: "Post retrieved successfully",
@@ -193,6 +212,55 @@ exports.getPost = async (req, res, next) => {
     commentsCount: plainPost.comments.length, // Comments count
   });
 };
+
+// Get comments for a specific post
+exports.getPostComments = async (req, res, next) => {
+  const { id } = req.params;
+
+  // Check if the post ID is valid
+  if (!mongoose.Types.ObjectId.isValid(id)) 
+    return next(sendError(400, "invalidPostId"));
+
+  const comments = await Comment.find({ postId: id })
+    .populate("user", "username profilePicture")
+    .sort({ createdAt: -1 }); // Latest comments first
+
+
+  res.status(200).json({
+    message: "Comments retrieved successfully",
+    comments
+  });
+};
+
+exports.addPurchaseIntent = async (req, res, next) => {
+  const userId = req.user?.id;
+  const { id } = req.params; // Post ID
+  const { intent } = req.body; // "yes" or "no"
+
+  if (!mongoose.Types.ObjectId.isValid(id)) 
+    return next(sendError(400, "invalidPostId"));
+
+  const post = await Post.findById(id);
+  if (!post) return next(sendError(404, "post"));
+
+  // Ensure the user has not already registered intent
+  if (post.purchaseIntent.some((p) => p.user.toString() === userId)) {
+    return next(sendError(400, "alreadyRegisteredYourIntent"));
+  }
+
+  // Add user intent
+  post.purchaseIntent.push({ user: userId, intent });
+
+  // Save post with new intent & updated conversion rate in one operation
+  await post.save();
+
+  return res.status(200).json({
+    message: "Purchase intent recorded",
+    purchaseIntent,
+  });
+};
+
+
 
 // Modify post
 exports.updatePost = async (req, res, next) => {

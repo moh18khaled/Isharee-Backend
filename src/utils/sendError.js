@@ -23,6 +23,7 @@ const errorMessages = {
     alreadyVerified:"Email already verified",
     missingCategories:"missing categories",
     InvalidEmail: "Invalid email format",
+    alreadyRegisteredYourIntent:"You have already registered your intent for this post",
   },
   401: {
     default: "Unauthorized. Please log in again.",
@@ -37,6 +38,7 @@ const errorMessages = {
     notCommentAuth: "User is not authorized to delete the comment",
     notBusinessOwner:"Forbidden: You must be a business owner to perform this action.",
     verifyEmail:"Please verify your email",
+    isBusinessOwner:"Business owner can't create a post"
   },
   404: {
     default: "Not found.",

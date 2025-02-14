@@ -11,6 +11,7 @@ const upload = require("../utils/fileUpload");
 const router = express.Router();
 
 router.get("/interests", verifyToken, asyncHandler(postController.getPostsByInterests)); // Return Posts based on interests
+router.post("/purchase-intent", verifyToken, asyncHandler(postController.addPurchaseIntent)); 
 
 // Search for posts
 router.get("/search", asyncHandler(postController.searchPosts)); // Define this BEFORE /:id
@@ -44,6 +45,7 @@ router
   .delete(verifyToken, asyncHandler(postController.deletePost)); // Delete a post
 
   
+  router.get("/:id/comments",postController.getPostComments);
 
 // Toggle Like (Single route instead of separate like/unlike)
 router.patch("/:id/toggleLike", verifyToken, asyncHandler(postController.toggleLike));

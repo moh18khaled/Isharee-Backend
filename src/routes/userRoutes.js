@@ -9,7 +9,7 @@ const upload = require("../utils/fileUpload");
 
 const router = express.Router();
 
-router.get("/signup-data", userController.getSignupData);
+router.get("/signup-data", asyncHandler(userController.getSignupData));
 router.post(
   "/signup",
   validateRequiredFields("user"),
@@ -69,7 +69,7 @@ router.patch(
   asyncHandler(userController.toggleFollow)
 );
 
-router.get("/account/:id", optionalAuth, userController.getOtherUserAccount);
+router.get("/account/:id", optionalAuth, asyncHandler(userController.getOtherUserAccount));
 
 router.get(
   "/account/:id/followers",
@@ -83,12 +83,12 @@ router.get(
 );
 
 // Get all notifications
-router.get("/notifications", verifyToken, userController.getNotifications);
+router.get("/notifications", verifyToken, asyncHandler(userController.getNotifications));
 
 router.patch(
   "notifications/:notificationId",
   verifyToken,
-  userController.markAsRead
+  asyncHandler(userController.markAsRead)
 );
 
 module.exports = router;

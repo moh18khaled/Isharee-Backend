@@ -4,7 +4,8 @@ const mongoose = require("mongoose");
 const userRoutes = require("./routes/userRoutes");
 const businessOwnerRoutes = require("./routes/businessOwnerRoutes");
 const postRoutes = require("./routes/postRoutes");
-const paymentsRouter =require("./routes/paymentsRouter"); 
+const paymentsRouter =require("./routes/paymentsRouter");
+const dashboardRoutes =require("./routes/dashboardRoutes"); 
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const AppError = require("./utils/AppError");
@@ -70,6 +71,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/user", userRoutes);
 app.use("/businessOwner", businessOwnerRoutes);
 app.use("/posts", postRoutes);
+app.use("/dashboard", dashboardRoutes);
 app.use("/payments", paymentsRouter);
 
 // Default API Home Route

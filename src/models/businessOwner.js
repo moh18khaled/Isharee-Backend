@@ -35,16 +35,9 @@ const businessOwnerSchema = new mongoose.Schema({
     default: false, // Initially, no user has an active subscription
   },
   mentionedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
-  dashboard_data: {
-    categories: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
-    post_likes: { type: Number, default: 0 },
-    total_posts: { type: Number, default: 0 },
-    user_age_demographics: [
-      {
-        age_range: { type: String, required: true },
-        frequency: { type: Number, default: 0 }, // Number of users in this age range
-      },
-    ],
+  dashboard: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Dashboard",
   },
 });
 

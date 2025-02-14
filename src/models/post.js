@@ -40,6 +40,13 @@ const postSchema = new mongoose.Schema(
         ref: "Comment", // Reference to Comment model
       },
     ],
+    viewedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // Tracks views
+    purchaseIntent: [
+      {
+        user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        intent: { type: String, enum: ["yes", "no", "not sure"] },
+      },
+    ],
     rating: {
       type: Number,
       required: true,
@@ -49,10 +56,11 @@ const postSchema = new mongoose.Schema(
     businessOwner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "BusinessOwner", // Reference to the BusinessOwner model
-   //   required: true,
+      //   required: true,
     },
-    categories: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category",required: true,
-    }],
+    categories: [
+      { type: mongoose.Schema.Types.ObjectId, ref: "Category", required: true },
+    ],
   },
   {
     timestamps: true,

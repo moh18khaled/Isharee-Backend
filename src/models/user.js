@@ -139,6 +139,7 @@ const userSchema = new mongoose.Schema(
       ],
  //     required: true,
     },
+    lastActiveAt: { type: Date, default: Date.now }, // Track last activity
     refreshTokens: [refreshTokenSchema],
     posts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
     likedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
