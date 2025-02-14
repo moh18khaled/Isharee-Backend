@@ -9,9 +9,10 @@ const upload = require("../utils/fileUpload");
 
 const router = express.Router();
 
+router.get("/signup-data", userController.getSignupData);
 router.post(
   "/signup",
-  validateRequiredFields,
+  validateRequiredFields("user"),
   asyncHandler(userController.signup)
 );
 router.post(
@@ -20,13 +21,20 @@ router.post(
   asyncHandler(userController.login)
 );
 
+router.post("/logout", verifyToken, asyncHandler(userController.logout));
+
 router.get("/verify-email", asyncHandler(userController.verifyEmail));
+router.post(
+  "/contact",
+  validateRequiredFields("emailContent"),
+  asyncHandler(userController.contactSupport)
+);
 
 router
   .route("/account")
-  .get(verifyToken, asyncHandler(userController.getAccountData))
+  .get(verifyToken, asyncHandler(userController.getUserAccount))
   .patch(
-    verifyToken, 
+    verifyToken,
     upload.single("profilePicture"),
     asyncHandler(userController.updateAccount)
   )
@@ -37,8 +45,6 @@ router.patch(
   verifyToken,
   asyncHandler(userController.changePassword)
 );
-
-router.post("/logout", verifyToken, asyncHandler(userController.logout));
 
 router.use("/account/posts", verifyToken);
 
@@ -57,17 +63,32 @@ router
   .route("/account/following")
   .get(verifyToken, asyncHandler(userController.getFollowing));
 
-router
-  .route("/:id/follow")
-  .patch(verifyToken, asyncHandler(userController.followUser));
+router.patch(
+  "/:id/toggleFollow",
+  verifyToken,
+  asyncHandler(userController.toggleFollow)
+);
 
-router
-  .route("/:id/unfollow")
-  .patch(verifyToken, asyncHandler(userController.unFollowUser));
+router.get("/account/:id", optionalAuth, userController.getOtherUserAccount);
+
+router.get(
+  "/account/:id/followers",
+  optionalAuth,
+  asyncHandler(userController.getOtherUserFollowers)
+);
+router.get(
+  "/account/:id/following",
+  optionalAuth,
+  asyncHandler(userController.getOtherUserFollowing)
+);
 
 // Get all notifications
 router.get("/notifications", verifyToken, userController.getNotifications);
 
-router.patch("notifications/:notificationId", verifyToken, userController.markAsRead);
+router.patch(
+  "notifications/:notificationId",
+  verifyToken,
+  userController.markAsRead
+);
 
 module.exports = router;

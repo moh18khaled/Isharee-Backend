@@ -15,11 +15,7 @@ const businessOwnerSchema = new mongoose.Schema({
     unique: true,
     trim: true,
   },
-  businessType: {
-    type: String,
-    required: true,
-    maxlength: [50, "Business type cannot exceed 50 characters."],
-  },
+  categories: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }], // Array of categories
   address: {
     country: { type: String, required: true },
     city: { type: String, required: true },
@@ -34,6 +30,11 @@ const businessOwnerSchema = new mongoose.Schema({
     },
   },
   description: { type: String },
+  subscriptionActive: {
+    type: Boolean,
+    default: false, // Initially, no user has an active subscription
+  },
+  mentionedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
   dashboard_data: {
     categories: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
     post_likes: { type: Number, default: 0 },

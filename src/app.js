@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const userRoutes = require("./routes/userRoutes");
 const businessOwnerRoutes = require("./routes/businessOwnerRoutes");
 const postRoutes = require("./routes/postRoutes");
+const paymentsRouter =require("./routes/paymentsRouter"); 
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const AppError = require("./utils/AppError");
@@ -18,85 +19,76 @@ const seedCategories = require("./seedCategories");
 
 const app = express();
 
-app.use(express.static(path.join(__dirname, "client", "dist")));
+// Serve frontend only AFTER API routes
+//app.use(express.static(path.join(__dirname, "client", "dist")));
 
-//Serve index.html for all routes
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
-});
+dotenv.config();
 
 app.use(express.json());
 app.use(cookieParser());
 
+// CORS Configuration
 app.use(
   cors({
     origin: [
       "http://localhost:5173", // Local development
       "https://ishare-production-50fb.up.railway.app", // Deployed frontend
     ],
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"], // Allowed HTTP methods
-    allowedHeaders: ["Content-Type", "Authorization"], // Headers your client sends
-    credentials: true, // Allow credentials (cookies, authorization headers)
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
 
-// Use the 'dev' logging format
+// Middleware
 app.use(morgan("dev"));
 app.use(express.urlencoded({ extended: false }));
 
-// Configure rate limiter
+// Rate Limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
-  standardHeaders: "draft-8", // draft-6: `RateLimit-*` headers; draft-7 & draft-8: combined `RateLimit` header
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers.
+  limit: 100,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
 });
-
-// Apply the rate limiting middleware to all requests.
 app.use(limiter);
 
-// Secure HTTP headers
+// Security Enhancements
 app.use(helmet());
-
-// Enable compression for all responses
 app.use(compression());
 
-// Load environment variables
-dotenv.config();
-
-// Use express.json() to parse JSON request bodies
-app.use(express.json());
-
-// For photos
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-// MongoDB connection
+// MongoDB Connection
 mongoose
   .connect(process.env.MONGODB_URI)
-  .then(() => {
-    console.log("Connected to MongoDB");
-  })
-  .catch((err) => {
-    console.error("Failed to connect to MongoDB:", err.message);
-  });
+  .then(() => console.log("Connected to MongoDB"))
+  .catch((err) => console.error("Failed to connect to MongoDB:", err.message));
 
-//  seedCategories();
-// Use routes
+// For static uploads (images, etc.)
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// Use API routes BEFORE serving frontend
 app.use("/user", userRoutes);
 app.use("/businessOwner", businessOwnerRoutes);
 app.use("/posts", postRoutes);
+app.use("/payments", paymentsRouter);
 
-// Routes setup
+// Default API Home Route
 app.get("/", (req, res) => {
   res.send("Welcome to the iSharee Backend!");
 });
 
-// Handle any invalid route
+
+// Global Error Handling
+app.use(globalError);
+
+//  app.get('*', (req, res) => {
+//     res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
+//  });
+
+// Handle Invalid API Routes
 app.all("*", (req, res, next) => {
   next(new AppError("Cannot find this route", 404));
 });
 
-// Error Handling Middleware
-app.use(globalError);
 
 module.exports = app;

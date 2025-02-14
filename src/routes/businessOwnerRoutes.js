@@ -6,6 +6,9 @@ const verifyToken = require("../middlewares/verifyToken");
 
 const router = express.Router();
 
-router.post('/signup',validateRequiredFields, asyncHandler(businessOwnerController.signup));
+router.get("/signup-data",businessOwnerController.getSignupData)
+router.post('/signup',validateRequiredFields("businessOwner"), asyncHandler(businessOwnerController.signup));
+router.get('/business-names',asyncHandler(businessOwnerController.getBusinessNames));
+
 
 module.exports = router;

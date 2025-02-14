@@ -2,6 +2,7 @@ const User = require("../models/user");
 const BusinessOwner = require("../models/businessOwner");
 const Post = require("../models/post");
 const Category = require("../models/category");
+const Order = require("../models/order");
 const Notification = require("../models/notification");
 const mongoose = require("mongoose");
 const sendError = require("../utils/sendError");
@@ -15,26 +16,89 @@ const cloudinaryDelete = require("../utils/cloudinaryDelete");
 const validateUser = require("../utils/validateUser");
 const generateJWT = require("../utils/generateJWT");
 const verifyJWT = require("../utils/verifyJWT");
+const validator = require("validator");
 const fs = require("fs");
 const sendEmail = require("../utils/sendEmail");
 const createNotification = require("../utils/createNotification");
 
+// Get signup data
+exports.getSignupData = async (req, res, next) => {
+  const categories = await Category.find({}, "name").lean(); // Fetch all categories (only name)
+
+  return res.status(200).json({
+    categories: categories.map((cat) => cat.name), // Send category names only
+    heardAboutUs: [
+      "LinkedIn",
+      "Social Media",
+      "Friend/Family",
+      "Search Engine",
+      "Advertisement",
+      "Other",
+    ],
+    walletTypes: [
+      "Vodafone Cash",
+      "Etisalat Cash",
+      "Orange Cash",
+      "WE Pay",
+      "Meeza",
+      "Fawry Wallet",
+      "BM Wallet",
+      "CIB Smart Wallet",
+      "Ahly Phone Cash",
+      "QNB Mobile Wallet",
+      "Alex Bank Mobile Wallet",
+      "ADIB Wallet",
+      "ValU",
+    ],
+  });
+};
 
 // User signup
 exports.signup = async (req, res, next) => {
-  const { email, password, username, age } = req.body;
+  const {
+    email,
+    password,
+    username,
+    age,
+    walletNumber,
+    walletTypes,
+    interests,
+    heardAboutUs,
+  } = req.body;
 
   const oldUser = await User.findOne({
-    $or: [{ email: email }, { username: username }],
-  });
+    $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }],
+  }).lean();
 
   if (oldUser) return next(sendError(409, "userExists"));
+
+  // Validate heardAboutUs (must be within predefined values)
+  /* const validSources = [
+    "LinkedIn",
+    "Social Media",
+    "Friend/Family",
+    "Search Engine",
+    "Advertisement",
+    "other",
+  ];
+  
+  if (!validSources.includes(heardAboutUs)) {
+    return next(sendError(400, "invalidHeardAboutUs"));
+  }
+
+  */
 
   const newUser = new User({
     username,
     email,
     age,
     password, // Hashed automatically by the pre-save hook
+    interests,
+    heardAboutUs,
+    eWallet: {
+      walletNumber: walletNumber || null, // Allow nullable wallet number
+      walletTypes, // Array of wallet types
+    },
   });
 
   await newUser.save();
@@ -56,11 +120,13 @@ exports.signup = async (req, res, next) => {
       username,
       email,
       age,
-      password,
+      interests,
+      heardAboutUs,
     },
   });
 };
 
+// Verify user's email
 exports.verifyEmail = async (req, res, next) => {
   try {
     const { token } = req.query; // Get the token from the query parameter
@@ -80,11 +146,34 @@ exports.verifyEmail = async (req, res, next) => {
     user.isVerified = true;
     await user.save();
 
-
     res.status(200).json({ message: "Email verified successfully!" });
   } catch (err) {
     return next(sendError(400, "invalidToken"));
   }
+};
+
+exports.requestPasswordReset = async (req, res) => {
+  const user = await User.findOne({ email: req.body.email.toLowerCase() });
+  if (!user) return res.status(404).json({ message: "user" });
+
+  // Generate reset token
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  user.resetPasswordToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+  user.resetPasswordExpires = Date.now() + 15 * 60 * 1000; // Token expires in 15 mins
+  await user.save();
+
+  // Send reset email
+  const resetUrl = `https://yourwebsite.com/reset-password?token=${resetToken}`;
+  await sendEmail(
+    user.email,
+    "Password Reset Request",
+    `Click to reset: ${resetUrl}`
+  );
+
+  res.status(200).json({ message: "Password reset link sent" });
 };
 
 // User login
@@ -128,8 +217,8 @@ exports.login = async (req, res, next) => {
   });
 };
 
-// Get user's data
-exports.getAccountData = async (req, res, next) => {
+// Get user's account
+exports.getUserAccount = async (req, res, next) => {
   const userId = req.user?.id;
   const userRole = req.user?.role;
 
@@ -137,18 +226,35 @@ exports.getAccountData = async (req, res, next) => {
     return next(sendError(404, "user"));
   }
 
-  const user = await User.findById(userId).select(
-    "username email profilePicture"
-  );
+  const user = await User.findById(userId)
+    .select("username email profilePicture.url")
+    .lean();
 
   if (!user) return next(sendError(404, "user"));
 
+  // Get counts separately using aggregation (better performance for large datasets)
+  const [counts] = await User.aggregate([
+    { $match: { _id: user._id } },
+    {
+      $project: {
+        postsCount: { $size: "$posts" },
+        likedPostsCount: { $size: "$likedPosts" },
+        followingCount: { $size: "$following" },
+        followersCount: { $size: "$followers" },
+      },
+    },
+  ]);
   return res.status(200).json({
+    success: true,
     data: {
       username: user.username,
       email: user.email,
-      profilePicture: user.profilePicture,
+      profilePicture: user.profilePicture?.url,
       role: userRole,
+      postsCount: counts?.postsCount || 0,
+      likedPostsCount: counts?.likedPostsCount || 0,
+      followingCount: counts?.followingCount || 0,
+      followersCount: counts?.followersCount || 0,
     },
   });
 };
@@ -159,11 +265,11 @@ exports.updateAccount = async (req, res, next) => {
   const user = await validateUser(req, next);
 
   const duplicateUser = await User.findOne({
-    $or: [{ email }, { username }],
+    $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }],
   });
 
   // Validate uniqueness
-  if (duplicateUser && duplicateUser.id !== userId) {
+  if (duplicateUser && duplicateUser.id !== user._id) {
     if (duplicateUser.email === email || duplicateUser.username === username)
       return next(sendError(409, "userExists"));
   }
@@ -248,6 +354,9 @@ exports.changePassword = async (req, res, next) => {
 exports.deleteAccount = async (req, res, next) => {
   const user = await validateUser(req, next);
 
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   const public_id = user.profilePicture.public_id;
   const defaultPicturePublicId = process.env.DEFAULT_PROFILE_PICTURE_PUBLIC_ID;
 
@@ -259,38 +368,78 @@ exports.deleteAccount = async (req, res, next) => {
 
   // If the user is a business owner, delete the associated BusinessOwner document
   if (user.role === "businessOwner") {
-    await BusinessOwner.findOneAndDelete({ user_id: user._id });
+    const businessOwner = await BusinessOwner.findOneAndDelete(
+      { user_id: user._id },
+      { session }
+    );
+    if (businessOwner) {
+      await Order.deleteMany({ businessOwner: businessOwner._id }, { session });
+    }
   }
+
+  // Remove user from other users' followers & following lists
+  await Promise.all([
+    User.updateMany(
+      { following: user._id },
+      { $pull: { following: user._id } },
+      { session }
+    ),
+    User.updateMany(
+      { followers: user._id },
+      { $pull: { followers: user._id } },
+      { session }
+    ),
+  ]);
+  /*
+    to be discussed !!!!!
+
+  // Remove likes & comments made by the user
+  await Promise.all([
+    Post.updateMany(
+      { likes: user._id },
+      { $pull: { likes: user._id } },
+      { session }
+    ),
+    Post.updateMany(
+      { comments: user._id },
+      { $pull: { comments: user._id } },
+      { session }
+    ),
+    Comment.deleteMany({ author: user._id }, { session }), // Delete all comments made by the user
+  ]);
+
+  // Get all posts created by the user
+  const userPosts = await Post.find({ author: user._id }, { _id: 1 }).lean();
+
+  // Remove post reference from Categories
+  await Category.updateMany(
+    { _id: { $in: userPosts.categories } },
+    { $pull: { posts: userPosts._id } },
+    { session }
+  );
+
+  // Delete the user's posts
+  await Post.deleteMany({ author: user._id }, { session });
+
+  // Remove businessOwner's mentionedPosts if they exist
+  await BusinessOwner.updateMany(
+    { mentionedPosts: { $in: userPosts.map((post) => post._id) } },
+    { $pull: { mentionedPosts: { $in: userPosts.map((post) => post._id) } } },
+    { session }
+  );
+
+*/
+  // Delete notifications related to the user
+  await Notification.deleteMany({ userId: user._id }, { session });
+
+  await User.findByIdAndDelete(user._id, { session });
+
+  // Commit transaction
+  await session.commitTransaction();
+  session.endSession();
 
   // Clear authentication cookies
   clearCookies(res);
-
-  // Remove user from other users' followers & following lists
-  await User.updateMany(
-    { following: user._id },
-    { $pull: { following: user._id } }
-  );
-
-  await User.updateMany(
-    { followers: user._id },
-    { $pull: { followers: user._id } }
-  );
-
-  // Deleting likes and comments related to the user
-  await Post.updateMany(
-    { likes: user._id },
-    { $pull: { likes: user._id } } // Remove likes from the posts
-  );
-
-  await Post.updateMany(
-    { comments: user._id },
-    { $pull: { comments: user._id } } // Remove comments from the posts
-  );
-
-  await Notification.deleteMany({ userId: user._id });
-  await Post.deleteMany({ author: user._id });
-
-  await User.findByIdAndDelete(user._id);
 
   return res.status(200).json({
     message: "Account successfully deleted",
@@ -358,68 +507,6 @@ exports.getLikedPosts = async (req, res, next) => {
   });
 };
 
-// Follow a user
-exports.followUser = async (req, res, next) => {
-  const user = await validateUser(req, next);
-  const targetUserId = req.params.id; // User to follow
-  console.log(user._id.toString(), " ", targetUserId);
-  if (user._id.toString() === targetUserId)
-    return next(sendError(400, "cannotFollowSelf"));
-
-  if (!mongoose.Types.ObjectId.isValid(targetUserId))
-    return next(sendError(400, "invalidUserId"));
-
-  const targetUser = await User.findById(targetUserId);
-
-  if (!targetUser) return next(sendError(404, "user"));
-
-  if (user.following.includes(targetUserId))
-    return next(sendError(400, "alreadyFollowing"));
-
-  user.following.push(targetUserId);
-  targetUser.followers.push(user._id);
-  await Promise.all([user.save(), targetUser.save()]);
-
-/*
-  const notificationMessage = "You have got a new follower";
-  await createNotification(user._id, notificationMessage);
-*/
-
-
-
-  res.status(200).json({ message: "Followed successfully" });
-};
-
-// UnFollow a user
-exports.unFollowUser = async (req, res, next) => {
-  const user = await validateUser(req, next);
-  const targetUserId = req.params.id; // User to follow
-
-  if (user._id.toString() === targetUserId)
-    return next(sendError(400, "cannotUnfollowSelf"));
-
-  if (!mongoose.Types.ObjectId.isValid(targetUserId))
-    return next(sendError(400, "invalidUserId"));
-
-  const targetUser = await User.findById(targetUserId);
-
-  if (!targetUser) return next(sendError(404, "user"));
-
-  if (!user.following.includes(targetUserId))
-    return next(sendError(400, "alreadyNotFollowing"));
-
-  user.following = user.following.filter(
-    (id) => id.toString() !== targetUserId
-  );
-  targetUser.followers = targetUser.followers.filter(
-    (id) => id.toString() !== user._id.toString()
-  );
-
-  await Promise.all([user.save(), targetUser.save()]);
-
-  res.status(200).json({ message: "UnFollowed successfully" });
-};
-
 // Followers - following section
 exports.getFollowers = async (req, res, next) => {
   const user = await validateUser(req, next);
@@ -461,44 +548,150 @@ exports.getFollowing = async (req, res, next) => {
   });
 };
 
+// Follow/Unfollow user
+exports.toggleFollow = async (req, res, next) => {
+  const user = await validateUser(req, next);
+  const targetUserId = req.params.id;
 
-//
+  if (user._id.toString() === targetUserId)
+    return next(sendError(400, "cannotMake"));
 
+  if (!mongoose.Types.ObjectId.isValid(targetUserId))
+    return next(sendError(400, "invalidUserId"));
+
+  const targetUser = await User.findById(targetUserId);
+  if (!targetUser) return next(sendError(404, "user"));
+
+  const isFollowing = user.following.includes(targetUserId);
+
+  if (isFollowing) {
+    // Unfollow
+    user.following.pull(targetUserId);
+    targetUser.followers.pull(user._id);
+  } else {
+    // Follow
+    user.following.push(targetUserId);
+    targetUser.followers.push(user._id);
+  }
+
+  await Promise.all([user.save(), targetUser.save()]);
+
+  res.status(200).json({
+    message: isFollowing ? "Unfollowed successfully" : "Followed successfully",
+    followingCount: user.following.length,
+    followersCount: targetUser.followers.length,
+  });
+};
+
+// Get other user account
+exports.getOtherUserAccount = async (req, res, next) => {
+  const userId = req.params.id;
+
+  if (!mongoose.Types.ObjectId.isValid(id))
+    return next(sendError(400, "invalidUserId"));
+
+  if (!userId) {
+    return next(sendError(404, "user"));
+  }
+
+  const user = await User.findById(userId)
+    .select("username profilePicture.url role subscriptionActive")
+    .lean();
+
+  if (!user) return next(sendError(404, "user"));
+
+  const [counts] = await User.aggregate([
+    { $match: { _id: user._id } },
+    {
+      $project: {
+        postsCount: { $size: "$posts" },
+        likedPostsCount: { $size: "$likedPosts" },
+        followingCount: { $size: "$following" },
+        followersCount: { $size: "$followers" },
+      },
+    },
+  ]);
+  // Prepare response
+  const responseData = {
+    username: user.username,
+    profilePicture: user.profilePicture?.url,
+    role: user.role,
+    subscriptionActive: user.subscriptionActive,
+    postsCount: counts?.postsCount || 0,
+    likedPostsCount: counts?.likedPostsCount || 0,
+    followingCount: counts?.followingCount || 0,
+    followersCount: counts?.followersCount || 0,
+  };
+
+  // If BusinessOwner and subscription is active, fetch mentionedPosts in the same query
+  if (user.role === "BusinessOwner" && user.subscriptionActive) {
+    const businessOwner = await BusinessOwner.findById(userId)
+      .select("mentionedPosts")
+      .populate("mentionedPosts", "title content image.url")
+      .lean();
+
+    responseData.mentionedPosts = businessOwner?.mentionedPosts || [];
+  }
+
+  return res.status(200).json({ success: true, data: responseData });
+};
+
+// Contact support (send email)
+exports.contactSupport = async (req, res, next) => {
+  const { name, email, subject, message } = req.body;
+
+  if (!validator.isEmail(email)) return next(sendError(400, "InvalidEmail"));
+
+  const emailContent = `
+      <p><strong>Name:</strong> ${name}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Subject:</strong> ${subject}</p>
+      <p><strong>Message:</strong></p>
+      <p>${message}</p>
+    `;
+
+  await sendEmail(
+    process.env.SUPPORT_EMAIL,
+    `Support Request: ${subject}`,
+    message,
+    emailContent
+  );
+
+  res.status(201).json({ message: "Your message has been sent successfully." });
+};
 
 // Notifications section
 exports.getNotifications = async (req, res, next) => {
-    const user = await validateUser(req, next);
+  const user = await validateUser(req, next);
 
-    // Find notifications for the user
-    const notifications = await Notification.find({ userId: user._id  })
-      .sort({ createdAt: -1 }) // Sort by most recent
+  // Find notifications for the user
+  const notifications = await Notification.find({ userId: user._id }).sort({
+    createdAt: -1,
+  }); // Sort by most recent
 
-    return res.status(200).json({
-      message: 'Notifications retrieved successfully',
-      notifications,
-    });
-
+  return res.status(200).json({
+    message: "Notifications retrieved successfully",
+    notifications,
+  });
 };
-
 
 // Mark notification as read
 exports.markAsRead = async (req, res, next) => {
-    const { notificationId } = req.params;
+  const { notificationId } = req.params;
 
-    // Find notification and mark as read
-    const notification = await Notification.findByIdAndUpdate(
-      notificationId,
-      { isRead: true },
-      { new: true } // Return the updated notification
-    );
+  // Find notification and mark as read
+  const notification = await Notification.findByIdAndUpdate(
+    notificationId,
+    { isRead: true },
+    { new: true } // Return the updated notification
+  );
 
-    if (!notification) {
-      return next(sendError(404, 'notification'));
-    }
+  if (!notification) {
+    return next(sendError(404, "notification"));
+  }
 
-    return res.status(200).json({
-      message: 'Notification marked as read',
-      notification,
-    });
-
+  return res.status(200).json({
+    message: "Notification marked as read",
+    notification,
+  });
 };

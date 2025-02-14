@@ -4,9 +4,16 @@ const postController = require("../controllers/postController");
 const asyncHandler = require("express-async-handler");
 const verifyToken = require("../middlewares/verifyToken");
 const optionalAuth = require("../middlewares/optionalAuth");
+const validateRequiredFields = require("../middlewares/validateRequiredFields");
+
 const upload = require("../utils/fileUpload");
 
 const router = express.Router();
+
+router.get("/interests", verifyToken, asyncHandler(postController.getPostsByInterests)); // Return Posts based on interests
+
+// Search for posts
+router.get("/search", asyncHandler(postController.searchPosts)); // Define this BEFORE /:id
 
 // Create a new post or get all posts
 router
@@ -16,13 +23,11 @@ router
     upload.fields([
       { name: "image", maxCount: 1 },
       { name: "video", maxCount: 1 },
-    ]),
+    ]),validateRequiredFields("post"),
     asyncHandler(postController.addPost)
   )
   .get(asyncHandler(postController.getPosts)); // Get all posts sorted by likes
 
-// Search for posts
-router.get("/search", asyncHandler(postController.searchPosts)); // Define this BEFORE /:id
 
 // Get, update, or delete a post by ID
 router
@@ -38,9 +43,10 @@ router
   )
   .delete(verifyToken, asyncHandler(postController.deletePost)); // Delete a post
 
-// Like and Unlike a post
-router.patch("/:id/like", verifyToken, asyncHandler(postController.likePost)); // Like a post
-router.patch("/:id/unlike", verifyToken, asyncHandler(postController.unlikePost)); // Unlike a post
+  
+
+// Toggle Like (Single route instead of separate like/unlike)
+router.patch("/:id/toggleLike", verifyToken, asyncHandler(postController.toggleLike));
 
 // Add and Remove comment
 router.post("/:id/addComment", verifyToken, asyncHandler(postController.addComment)); // Add a comment

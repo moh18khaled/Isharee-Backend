@@ -3,6 +3,7 @@ const Post = require("../models/post");
 const User = require("../models/user");
 const Category = require("../models/category");
 const Comment = require("../models/comments");
+const BusinessOwner = require("../models/businessOwner");
 const fs = require("fs");
 const sendError = require("../utils/sendError");
 const validateUser = require("../utils/validateUser");
@@ -14,48 +15,111 @@ const cloudinaryDelete = require("../utils/cloudinaryDelete");
 exports.addPost = async (req, res, next) => {
   const user = await validateUser(req, next);
 
-  const { text, imageUrl, imagePublicId, videoUrl, videoPublicId } = req.body;
-  if (!imageUrl || !imagePublicId) {
-    return next(sendError(400, "imageRequired"));
+  const {
+    title,
+    text,
+    imageUrl,
+    imagePublicId,
+    videoUrl,
+    videoPublicId,
+    businessName,
+    rating,
+  } = req.body;
+
+  const image = { url: imageUrl, public_id: imagePublicId };
+  const video = videoUrl ? { url: videoUrl, public_id: videoPublicId } : null;
+
+  const businessOwner = await BusinessOwner.findOne({
+    businessName: businessName.toLowerCase(),
+  });
+
+  if (!businessOwner) {
+    return res.status(404).json({ message: "BusinessName" });
   }
-  const image = {
-    url: imageUrl,
-    public_id: imagePublicId,
-  };
-  const video = {
-    url: videoUrl,
-    public_id: videoPublicId,
-  };
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  const categories = await Category.find({
+    _id: { $in: businessOwner.categories },
+  });
 
   // Create the post
   const post = new Post({
-    //title,
+    title,
     author: user._id,
-    content:text,
+    content: text,
     image,
     ...(video && { video }), // Add video only if it exists
+    businessOwner: businessOwner._id,
+    categories: categories.map((cat) => cat._id), // Link categories from BusinessOwner
+    rating,
   });
-
-
 
   // Save the post and update user data in parallel
 
   user.posts.push(post._id);
+  businessOwner.mentionedPosts.push(post._id);
+
+  // Add post to each category
+  categories.forEach((category) => category.posts.push(post._id));
+
+  await post.save({ session });
+  await user.save({ session });
+  await businessOwner.save({ session });
 
   await Promise.all([
-    post.save(),
-    user.save(),
+    post.save({ session }),
+    user.save({ session }),
+    businessOwner.save({ session }),
+    ...categories.map((category) => category.save({ session })), // Ensure each category uses session
   ]);
-  console.log(req.body);
+
+  await session.commitTransaction();
+  session.endSession();
 
   return res.status(200).json({
     message: "Post added successfully",
     data: {
       author: user,
-      content:text,
+      content: text,
       image,
       video: video || null,
+      businessOwner: businessOwner._id,
+      categories: businessOwner.categories.map((cat) => cat._id),
+      rating,
     },
+  });
+};
+
+// Get posts about user's interests (home page)
+exports.getPostsByInterests = async (req, res, next) => {
+  const userId = req.user?.id;
+
+  if (!userId) return next(sendError(404, "user"));
+
+  // Find user and get their interests
+  const user = await User.findById(userId).select("interests").lean();
+  if (!user) return next(sendError(404, "user"));
+
+  // Find categories matching user's interests
+  const categories = await Category.find({ name: { $in: user.interests } })
+    .select("_id")
+    .lean();
+  const categoryIds = categories.map((cat) => cat._id);
+
+  // Find posts matching those categories
+  const posts = await Post.find({ categories: { $in: categoryIds } })
+    .populate("author", "username profilePicture.url") // Fetch user details
+    .populate({
+      path: "businessOwner",
+      select: "businessName username profilePicture.url",
+    }) // Fetch business details
+    .lean();
+
+  return res.status(200).json({
+    success: true,
+    data: posts,
   });
 };
 
@@ -201,41 +265,30 @@ exports.updatePost = async (req, res, next) => {
   });
 };
 
-// Like post
-exports.likePost = async (req, res, next) => {
+// Like/Unlike post
+exports.toggleLike = async (req, res, next) => {
   const user = await validateUser(req, next);
   const post = await validatePost(req, next);
 
-  if (post.likes.includes(user.id)) return next(sendError(400, "postIsLiked"));
+  const alreadyLiked = post.likes.includes(user.id);
 
-  post.likes.push(user.id);
-  user.likedPosts.push(post._id);
-  await post.save();
-  await user.save();
-
-  res.status(200).json({
-    message: "Post liked successfully",
-    likesCount: post.likes.length,
-    likedBy: post.likes,
-  });
-};
-
-//  Unlike post
-exports.unlikePost = async (req, res, next) => {
-  const user = await validateUser(req, next);
-  const post = await validatePost(req, next);
-
-  if (!post.likes.includes(user.id))
-    return next(sendError(400, "postIsUnLiked"));
-
-  post.likes.pull(user.id);
-  user.likedPosts.pull(post._id);
+  if (alreadyLiked) {
+    // Unlike post
+    post.likes.pull(user.id);
+    user.likedPosts.pull(post._id);
+  } else {
+    // Like post
+    post.likes.push(user.id);
+    user.likedPosts.push(post._id);
+  }
 
   await post.save();
   await user.save();
 
   res.status(200).json({
-    message: "Post unliked successfully",
+    message: alreadyLiked
+      ? "Post unliked successfully"
+      : "Post liked successfully",
     likesCount: post.likes.length,
     likedBy: post.likes,
   });
@@ -312,26 +365,45 @@ exports.deletePost = async (req, res, next) => {
   const user = await validateUser(req, next);
   const post = await validatePost(req, next);
 
-  //if (post.video) await cloudinaryDelete(post.video.public_id);
+  // Start a MongoDB transaction
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  if (post.video) await cloudinaryDelete(post.video.public_id);
   await cloudinaryDelete(post.image.public_id);
 
   // Remove the post reference from the user's likedPosts and posts
-  user.likedPosts.pull(post._id);
+  await User.updateMany(
+    { likedPosts: post._id },
+    { $pull: { likedPosts: post._id } },
+    { session } // Added session
+  );
   user.posts.pull(post._id);
+  await user.save({ session });
 
-  // Remove the post reference from the categories
-  const categories = await Category.find({ _id: { $in: post.categories } });
-  categories.forEach(async (category) => {
-    category.posts.pull(post._id);
-    await category.save();
-  });
+  // Remove post reference from Categories
+  await Category.updateMany(
+    { _id: { $in: post.categories } },
+    { $pull: { posts: post._id } },
+    { session }
+  );
+
+  // Remove the post reference from BusinessOwner's mentionedPosts
+  await BusinessOwner.updateMany(
+    { mentionedPosts: post._id },
+    { $pull: { mentionedPosts: post._id } },
+    { session }
+  );
 
   // Delete all the comments related to the post
-  await Comment.deleteMany({ postId: post._id });
+  await Comment.deleteMany({ postId: post._id }, { session });
 
-  // Save user and post deletion
-  await user.save();
-  await Post.findByIdAndDelete(post._id);
+  // Delete the post
+  await Post.findByIdAndDelete(post._id, { session });
+
+  // Commit the transaction
+  await session.commitTransaction();
+  session.endSession();
 
   res.status(200).json({
     message: "Post deleted successfully",

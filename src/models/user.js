@@ -14,6 +14,8 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
+      lowercase: true,
+      trim: true,
       minlength: [3, "Username must be at least 3 characters long."],
       maxlength: [15, "Username must be less than 15 characters long."],
       validate: {
@@ -42,12 +44,14 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
+      lowercase: true,
+      trim: true,
       validate: {
         validator: (value) => validator.isEmail(value), // Validate email format
         message: "Please provide a valid email address.",
       },
     },
-    isVerified: { type: Boolean, default: false }, 
+    isVerified: { type: Boolean, default: false },
     age: { type: Number, required: true },
     ageGroup: {
       // The added age group field
@@ -81,12 +85,59 @@ const userSchema = new mongoose.Schema(
         type: String,
         unique: true,
         sparse: true,
+        lowercase: true, // Store in lowercase
+        trim: true, // Remove accidental spaces
         maxlength: [50, "Wallet number too long."],
         validate: {
-          validator: (value) => /^[a-zA-Z0-9]+$/.test(value), // Example format validation for wallet number
+          validator: (value) => /^[a-zA-Z0-9]+$/.test(value), // Ensure alphanumeric only
           message: "Wallet number should be alphanumeric.",
         },
+      },      
+      walletType: {
+        type: [String],
+        enum: [
+          "Vodafone Cash",
+          "Etisalat Cash",
+          "Orange Cash",
+          "WE Pay",
+          "Meeza",
+          "Fawry Wallet",
+          "BM Wallet",
+          "CIB Smart Wallet",
+          "Ahly Phone Cash",
+          "QNB Mobile Wallet",
+          "Alex Bank Mobile Wallet",
+          "ADIB Wallet",
+          "ValU",
+        ],
+        // validate: {
+        //   validator: function (value) {
+        //     return value.length > 0; // Ensures at least one walletType is selected
+        //   },
+        //   message: "At least one wallet type must be selected.",
+        // },
+        required: true,
       },
+    },
+    interests: {
+      type: [String],
+      default: [],
+      // validate: [
+      //   (array) => array.length > 0,
+      //   "You must choose at least one interest.",
+      // ],
+    },
+    heardAboutUs: {
+      type: String,
+      enum: [
+        "LinkedIn",
+        "Social Media",
+        "Friend/Family",
+        "Search Engine",
+        "Advertisement",
+        "other",
+      ],
+ //     required: true,
     },
     refreshTokens: [refreshTokenSchema],
     posts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],

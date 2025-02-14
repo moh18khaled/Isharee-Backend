@@ -3,10 +3,11 @@ const AppError = require("./AppError");
 const errorMessages = {
   400: {
     default: "Bad request.",
+    cannotMake:"Can't make this action",
     missingFields: "All fields are required.",
     invalidCategories: "Some categories do not exist in the system.",
     invalidId: "Invalid ID format.",
-    invalidUserId: "Invalid post ID.",
+    invalidUserId: "Invalid user ID.",
     invalidPostId: "Invalid post ID.",
     imageRequired: "Image is required.",
     postIsLiked: "Post is already liked",
@@ -20,6 +21,8 @@ const errorMessages = {
     noToken:"Token is required",
     invalidToken:"Invalid or expired token",
     alreadyVerified:"Email already verified",
+    missingCategories:"missing categories",
+    InvalidEmail: "Invalid email format",
   },
   401: {
     default: "Unauthorized. Please log in again.",
@@ -29,10 +32,10 @@ const errorMessages = {
   },
   403: {
     default: "Forbidden.",
-    notAuthenticated:
-      "Forbidden: You must be logged in to perform this action.",
+    notAuthenticated:"Forbidden: You must be logged in to perform this action.",
     notAuthorized: "Forbidden: You are not authorized to update this post",
     notCommentAuth: "User is not authorized to delete the comment",
+    notBusinessOwner:"Forbidden: You must be a business owner to perform this action.",
     verifyEmail:"Please verify your email",
   },
   404: {
@@ -45,6 +48,9 @@ const errorMessages = {
     comment: "Comment not found",
     matchingPosts:"No matching posts found",
     notification:"Notification not found",
+    BusinessName:"BusinessName not found",
+    approval:"Approval URL not found",
+    order:"Order not found",
   },
   409: {
     default: "Conflict.",
@@ -58,6 +64,7 @@ const errorMessages = {
       "An error occurred while securing your password. Please try again later.",
     compareError:
       "An error occurred while verifying your password. Please try again later.",
+      emailSendFailed:"Email send failed",
   },
 
   default: "An error occurred.",
