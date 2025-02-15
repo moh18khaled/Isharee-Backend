@@ -3,6 +3,7 @@ const BusinessOwner = require("../models/businessOwner");
 const Post = require("../models/post");
 const User = require("../models/user");
 const SearchHistory = require("../models/searchHistory");
+
 const Category = require("../models/category");
 const sendError = require("../utils/sendError");
 
