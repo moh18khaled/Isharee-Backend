@@ -2,8 +2,7 @@ const Dashboard = require("../models/dashboard");
 const BusinessOwner = require("../models/businessOwner");
 const Post = require("../models/post");
 const User = require("../models/user");
-const SearchHistory = require("../models/searchHistory");
-
+const SearchHistory = require("../models/SearchHistory");
 const Category = require("../models/category");
 const sendError = require("../utils/sendError");
 
