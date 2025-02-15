@@ -1,6 +1,7 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const app = require('./src/app');
+const { scheduleDashboardUpdates } = require('./src/utils/scheduleDashboardUpdates');
 const http = require('http'); 
 
 /*const initializeSocket = require("./src/utils/socket");  // Your socket utility file
@@ -15,6 +16,10 @@ initializeSocket(server);
 dotenv.config();
 
 const PORT = process.env.PORT || 5000;
+
+// Initialize dashboard updates
+scheduleDashboardUpdates();
+
 
 // Start the server
 app.listen(PORT, () => {

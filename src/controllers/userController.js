@@ -587,7 +587,7 @@ exports.toggleFollow = async (req, res, next) => {
 exports.getOtherUserAccount = async (req, res, next) => {
   const userId = req.params.id;
 
-  if (!mongoose.Types.ObjectId.isValid(id))
+  if (!mongoose.Types.ObjectId.isValid(userId))
     return next(sendError(400, "invalidUserId"));
 
   if (!userId) {

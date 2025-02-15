@@ -157,6 +157,7 @@ exports.getPosts = async (req, res, next) => {
 exports.getPost = async (req, res, next) => {
   const userId = req.user?.id;
   const { id } = req.params;
+  console.log(id)
   // Check if the post ID is valid
   if (!mongoose.Types.ObjectId.isValid(id))
     return next(sendError(400, "invalidPostId"));
@@ -188,10 +189,6 @@ exports.getPost = async (req, res, next) => {
       isOwner = post.author._id.toString() === user._id.toString(); // Is the author
       isLiked = post.likes.some((like) => like.equals(user.id)); // Check if the current user has liked the post
     }
-  }
-
-  if (!post) {
-    return next(sendError(404, "post"));
   }
 
   if (isUser) {

@@ -16,7 +16,7 @@ exports.getBusinessNames = async (req, res, next) => {
     ).lean(); // Convert Mongoose documents to plain objects
 
     const businessNames = businessOwners.map((business) => business.businessName); // Extract only the names
-
+    businessNames.push("dddddaa")
     return res.status(200).json({
       businessNames, // Return as an array of strings
     });

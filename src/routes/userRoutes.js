@@ -53,7 +53,7 @@ router.route("/account/posts").get(asyncHandler(userController.getPosts)); // Ge
 
 router
   .route("/account/posts/liked-posts")
-  .get(asyncHandler(userController.getLikedPosts)); // Get posts liked by the user
+  .get(verifyToken,asyncHandler(userController.getLikedPosts)); // Get posts liked by the user
 
 router
   .route("/account/followers")

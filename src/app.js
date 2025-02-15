@@ -21,7 +21,7 @@ const seedCategories = require("./seedCategories");
 const app = express();
 
 // Serve frontend only AFTER API routes
-//app.use(express.static(path.join(__dirname, "client", "dist")));
+app.use(express.static(path.join(__dirname, "client", "dist")));
 
 dotenv.config();
 
@@ -55,7 +55,13 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // Security Enhancements
-app.use(helmet());
+app.use(
+  helmet.contentSecurityPolicy({
+    directives: {
+      "img-src": ["'self'", "data:", "https://res.cloudinary.com"],
+    },
+  })
+);
 app.use(compression());
 
 // MongoDB Connection
@@ -83,9 +89,9 @@ app.get("/", (req, res) => {
 // Global Error Handling
 app.use(globalError);
 
-//  app.get('*', (req, res) => {
-//     res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
-//  });
+app.get('*', (req, res) => {
+     res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
+});
 
 // Handle Invalid API Routes
 app.all("*", (req, res, next) => {
