@@ -17,29 +17,39 @@ const compression = require("compression");
 const morgan = require("morgan");
 const { initializeSocket } = require("./utils/socket");
 const seedCategories = require("./seedCategories");
+dotenv.config();
 
 const app = express();
 
 // Serve frontend only AFTER API routes
 app.use(express.static(path.join(__dirname, "client", "dist")));
 
-dotenv.config();
 
 app.use(express.json());
 app.use(cookieParser());
 
 // CORS Configuration
+const allowedOrigins = [
+  "http://localhost:5000",
+  "http://localhost:5173", // Local development
+  "https://isharee-backend-production.up.railway.app", // Deployed frontend
+];
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173", // Local development
-      "https://ishare-production-50fb.up.railway.app", // Deployed frontend
-    ],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
 );
+
 
 // Middleware
 app.use(morgan("dev"));
@@ -48,7 +58,7 @@ app.use(express.urlencoded({ extended: false }));
 // Rate Limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 100,
+  limit: 10000,
   standardHeaders: "draft-8",
   legacyHeaders: false,
 });
@@ -58,12 +68,12 @@ app.use(limiter);
 app.use(
   helmet.contentSecurityPolicy({
     directives: {
-      "img-src": ["'self'", "data:", "https://res.cloudinary.com"],
+      "default-src": ["'self'"],
+      "img-src": ["*"], // Allows images from any source
+      "connect-src": ["'self'", "https://isharee-backend-production.up.railway.app"], // Allow backend API requests
     },
   })
 );
-app.use(compression());
-
 // MongoDB Connection
 mongoose
   .connect(process.env.MONGODB_URI)

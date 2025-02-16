@@ -16,9 +16,8 @@ exports.addPost = async (req, res, next) => {
   const user = await validateUser(req, next);
   const userRole = req.user?.role;
 
-  if(req.user?.role==="businessOwner"){
+  if (req.user?.role === "businessOwner") {
     return next(sendError(403, "isBusinessOwner"));
-
   }
   const {
     title,
@@ -35,7 +34,7 @@ exports.addPost = async (req, res, next) => {
   const video = videoUrl ? { url: videoUrl, public_id: videoPublicId } : null;
 
   const businessOwner = await BusinessOwner.findOne({
-    businessName: { $regex: businessName, $options: 'i' }
+    businessName: { $regex: businessName, $options: "i" },
   });
 
   if (!businessOwner) {
@@ -157,7 +156,7 @@ exports.getPosts = async (req, res, next) => {
 exports.getPost = async (req, res, next) => {
   const userId = req.user?.id;
   const { id } = req.params;
-  console.log(id)
+  console.log(id);
   // Check if the post ID is valid
   if (!mongoose.Types.ObjectId.isValid(id))
     return next(sendError(400, "invalidPostId"));
@@ -170,10 +169,10 @@ exports.getPost = async (req, res, next) => {
       select: "user_id",
       populate: {
         path: "user_id",
-        select: "username profilePicture"
-      }
+        select: "username profilePicture",
+      },
     });
-      if (!post) return next(sendError(404, "post"));
+  if (!post) return next(sendError(404, "post"));
 
   // Convert to plain JavaScript object after population
   const plainPost = post.toObject();
@@ -215,17 +214,16 @@ exports.getPostComments = async (req, res, next) => {
   const { id } = req.params;
 
   // Check if the post ID is valid
-  if (!mongoose.Types.ObjectId.isValid(id)) 
+  if (!mongoose.Types.ObjectId.isValid(id))
     return next(sendError(400, "invalidPostId"));
 
   const comments = await Comment.find({ postId: id })
     .populate("user", "username profilePicture")
     .sort({ createdAt: -1 }); // Latest comments first
 
-
   res.status(200).json({
     message: "Comments retrieved successfully",
-    comments
+    comments,
   });
 };
 
@@ -234,7 +232,7 @@ exports.addPurchaseIntent = async (req, res, next) => {
   const { id } = req.params; // Post ID
   const { intent } = req.body; // "yes" or "no"
 
-  if (!mongoose.Types.ObjectId.isValid(id)) 
+  if (!mongoose.Types.ObjectId.isValid(id))
     return next(sendError(400, "invalidPostId"));
 
   const post = await Post.findById(id);
@@ -256,8 +254,6 @@ exports.addPurchaseIntent = async (req, res, next) => {
     purchaseIntent,
   });
 };
-
-
 
 // Modify post
 exports.updatePost = async (req, res, next) => {
@@ -433,8 +429,8 @@ exports.deletePost = async (req, res, next) => {
   // Start a MongoDB transaction
   const session = await mongoose.startSession();
   session.startTransaction();
+  if (post.video.public_id) await cloudinaryDelete(post.video.public_id);
 
-  if (post.video) await cloudinaryDelete(post.video.public_id);
   await cloudinaryDelete(post.image.public_id);
 
   // Remove the post reference from the user's likedPosts and posts
