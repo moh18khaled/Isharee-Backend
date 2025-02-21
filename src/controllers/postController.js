@@ -156,7 +156,7 @@ exports.getPosts = async (req, res, next) => {
 exports.getPost = async (req, res, next) => {
   const userId = req.user?.id;
   const { id } = req.params;
-  console.log(id);
+  
   // Check if the post ID is valid
   if (!mongoose.Types.ObjectId.isValid(id))
     return next(sendError(400, "invalidPostId"));
@@ -183,10 +183,11 @@ exports.getPost = async (req, res, next) => {
 
   if (userId) {
     const user = await User.findById(userId);
+
     if (user) {
       isUser = true;
-      isOwner = post.author._id.toString() === user._id.toString(); // Is the author
-      isLiked = post.likes.some((like) => like.equals(user.id)); // Check if the current user has liked the post
+      isOwner = post.author?._id.toString() === userId.toString(); // Is the author
+      isLiked = post.likes.some((like) => like.equals(userId)); // Check if the current user has liked the post
     }
   }
 
@@ -197,6 +198,29 @@ exports.getPost = async (req, res, next) => {
       { $addToSet: { viewedBy: userId } } // Ensures unique entries
     );
   }
+
+  // Add `isCurrentUser` to the author
+  plainPost.author = {
+    ...plainPost.author,
+    isCurrentUser: userId ? plainPost.author?._id.toString() === userId : false,
+  };
+
+  // Add `isCurrentUser` to the business owner (if available)
+  if (plainPost.businessOwner?.user_id) {
+    plainPost.businessOwner.user_id = {
+      ...plainPost.businessOwner.user_id,
+      isCurrentUser: userId ? plainPost.businessOwner.user_id._id.toString() === userId : false,
+    };
+  }
+
+  // Add `isCurrentUser` to each comment owner
+  plainPost.comments = plainPost.comments.map((comment) => ({
+    ...comment,
+    user: {
+      ...comment.user,
+      isCurrentUser: userId ? comment.user._id.toString() === userId : false,
+    },
+  }));
 
   return res.status(200).json({
     message: "Post retrieved successfully",

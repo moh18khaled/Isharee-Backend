@@ -11,8 +11,9 @@ const PAYPAL_API = process.env.PAYPAL_API;
 exports.createOrder = async (req, res, next) => {
   const user = await validateUser(req, next);
   const businessOwner = await BusinessOwner.findOne({ user_id: user._id });
-  console.log(businessOwner._id);
 
+  if(businessOwner.subscriptionActive)
+    return next(sendError(400, "alreadySubscribed"));
   const accessToken = await getAccessToken();
 
   const { amount = "10.00", currency = "USD" } = req.body;
@@ -44,7 +45,6 @@ exports.createOrder = async (req, res, next) => {
       },
     }
   );
-  console.log("PayPal Response:", response.data);
 
   // Ensure links exist before accessing them
   const approvalUrl = response.data.links?.find(

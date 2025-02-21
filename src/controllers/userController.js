@@ -97,7 +97,7 @@ exports.signup = async (req, res, next) => {
     heardAboutUs,
     eWallet: {
       walletNumber: walletNumber || null, // Allow nullable wallet number
-      walletTypes, // Array of wallet types
+      walletType:walletTypes, // Array of wallet types
     },
   });
 
@@ -244,6 +244,23 @@ exports.getUserAccount = async (req, res, next) => {
       },
     },
   ]);
+
+
+  // If the user is a BusinessOwner, fetch mentionedPosts
+  let mentionedPosts = [];
+  if (userRole === "businessOwner") {
+    const businessOwner = await BusinessOwner.findOne({ user_id: userId })
+      .populate({
+        path: "mentionedPosts",
+        select: "title image.url", // Only get title and image URL
+      })
+      .lean();
+
+    if (businessOwner) {
+      mentionedPosts = businessOwner.mentionedPosts;
+    }
+  }
+
   return res.status(200).json({
     success: true,
     data: {
@@ -255,6 +272,7 @@ exports.getUserAccount = async (req, res, next) => {
       likedPostsCount: counts?.likedPostsCount || 0,
       followingCount: counts?.followingCount || 0,
       followersCount: counts?.followersCount || 0,
+      mentionedPosts,
     },
   });
 };

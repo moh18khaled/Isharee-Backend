@@ -21,6 +21,8 @@ const errorMessages = {
     noToken:"Token is required",
     invalidToken:"Invalid or expired token",
     alreadyVerified:"Email already verified",
+    alreadySubscribed:"User already subscribed",
+
     missingCategories:"missing categories",
     InvalidEmail: "Invalid email format",
     alreadyRegisteredYourIntent:"You have already registered your intent for this post",
