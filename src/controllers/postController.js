@@ -202,14 +202,14 @@ exports.getPost = async (req, res, next) => {
   // Add `isCurrentUser` to the author
   plainPost.author = {
     ...plainPost.author,
-    isCurrentUser: userId ? plainPost.author?._id.toString() === userId : false,
+    isCurrentUser: userId ? plainPost.author?._id.toString() === userId.toString() : false,
   };
 
   // Add `isCurrentUser` to the business owner (if available)
   if (plainPost.businessOwner?.user_id) {
     plainPost.businessOwner.user_id = {
       ...plainPost.businessOwner.user_id,
-      isCurrentUser: userId ? plainPost.businessOwner.user_id._id.toString() === userId : false,
+      isCurrentUser: userId ? plainPost.businessOwner.user_id._id.toString() === userId.toString() : false,
     };
   }
 
@@ -218,15 +218,15 @@ exports.getPost = async (req, res, next) => {
     ...comment,
     user: {
       ...comment.user,
-      isCurrentUser: userId ? comment.user._id.toString() === userId : false,
+      isCurrentUser: userId ? comment.user._id.toString() === userId.toString() : false,
     },
   }));
-
+  console.log(plainPost);
   return res.status(200).json({
     message: "Post retrieved successfully",
     post: plainPost,
     isOwner,
-    isUser,
+    isUser, 
     isLiked,
     likesCount: plainPost.likes.length, // Likes count
     commentsCount: plainPost.comments.length, // Comments count

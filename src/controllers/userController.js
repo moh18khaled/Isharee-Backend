@@ -629,6 +629,23 @@ exports.getOtherUserAccount = async (req, res, next) => {
       },
     },
   ]);
+
+  
+
+  let mentionedPosts = [];
+  if (user.role === "businessOwner") {
+    const businessOwner = await BusinessOwner.findOne({ user_id: userId })
+      .populate({
+        path: "mentionedPosts",
+        select: "title image.url", // Only get title and image URL
+      })
+      .lean();
+
+    if (businessOwner) {
+      mentionedPosts = businessOwner.mentionedPosts;
+    }
+  }
+
   // Prepare response
   const responseData = {
     username: user.username,
@@ -639,6 +656,7 @@ exports.getOtherUserAccount = async (req, res, next) => {
     likedPostsCount: counts?.likedPostsCount || 0,
     followingCount: counts?.followingCount || 0,
     followersCount: counts?.followersCount || 0,
+    mentionedPosts,
   };
 
   // If BusinessOwner and subscription is active, fetch mentionedPosts in the same query
