@@ -24,7 +24,7 @@ const createNotification = require("../utils/createNotification");
 // Get signup data
 exports.getSignupData = async (req, res, next) => {
   const categories = await Category.find({}, "name").lean(); // Fetch all categories (only name)
-
+  console.log(User.schema.obj);
   return res.status(200).json({
     categories: categories.map((cat) => cat.name), // Send category names only
     heardAboutUs: [
@@ -87,6 +87,11 @@ exports.signup = async (req, res, next) => {
   }
 
   */
+console.log(99999)
+  const existingUser = await User.findOne({ "eWallet.walletNumber": walletNumber });
+if (existingUser) 
+  return next(sendError(400, "WalletNumber"));
+
 
   const newUser = new User({
     username,
@@ -96,11 +101,12 @@ exports.signup = async (req, res, next) => {
     interests,
     heardAboutUs,
     eWallet: {
-      walletNumber: walletNumber || null, // Allow nullable wallet number
+      walletNumber: walletNumber, // Allow nullable wallet number
       walletType:walletTypes, // Array of wallet types
     },
   });
 
+  
   await newUser.save();
 
   const verificationToken = await generateJWT({ id: newUser.id }, "1h");

@@ -22,7 +22,7 @@ const errorMessages = {
     invalidToken:"Invalid or expired token",
     alreadyVerified:"Email already verified",
     alreadySubscribed:"User already subscribed",
-
+    WalletNumber:"Wallet number is already in use. Please choose a different one.",
     missingCategories:"missing categories",
     InvalidEmail: "Invalid email format",
     alreadyRegisteredYourIntent:"You have already registered your intent for this post",

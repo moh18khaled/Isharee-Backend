@@ -18,10 +18,8 @@ const userSchema = new mongoose.Schema(
       trim: true,
       minlength: [3, "Username must be at least 3 characters long."],
       maxlength: [15, "Username must be less than 15 characters long."],
-      validate: {
-        validator: (value) => /^[a-zA-Z0-9_]+$/.test(value), // Validate username format (alphanumeric + underscores)
-        message: "Username can only contain letters, numbers, and underscores.",
-      },
+      match: [/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores."],
+
     },
     password: {
       type: String,
@@ -87,11 +85,12 @@ const userSchema = new mongoose.Schema(
         sparse: true,
         lowercase: true, // Store in lowercase
         trim: true, // Remove accidental spaces
-        maxlength: [50, "Wallet number too long."],
-        validate: {
-          validator: (value) => /^[a-zA-Z0-9]+$/.test(value), // Ensure alphanumeric only
-          message: "Wallet number should be alphanumeric.",
-        },
+        maxlength: [50, "Wallet number is too long."],
+        // validate: {
+        //   validator: (value) => /^[a-zA-Z0-9]+$/.test(value), // Ensure alphanumeric only
+        //   message: "Wallet number should be alphanumeric.",
+        // },
+          default: undefined,
       },      
       walletType: {
         type: [String],

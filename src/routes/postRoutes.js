@@ -45,7 +45,7 @@ router
   .delete(verifyToken, asyncHandler(postController.deletePost)); // Delete a post
 
   
-  router.get("/:id/comments",postController.getPostComments);
+  router.get("/:id/comments",optionalAuth,postController.getPostComments);
 
 // Toggle Like (Single route instead of separate like/unlike)
 router.patch("/:id/toggleLike", verifyToken, asyncHandler(postController.toggleLike));

@@ -221,7 +221,7 @@ exports.getPost = async (req, res, next) => {
       isCurrentUser: userId ? comment.user._id.toString() === userId.toString() : false,
     },
   }));
-  console.log(plainPost);
+
   return res.status(200).json({
     message: "Post retrieved successfully",
     post: plainPost,
@@ -235,20 +235,30 @@ exports.getPost = async (req, res, next) => {
 
 // Get comments for a specific post
 exports.getPostComments = async (req, res, next) => {
+  const userId = req.user?.id;
   const { id } = req.params;
 
   // Check if the post ID is valid
   if (!mongoose.Types.ObjectId.isValid(id))
     return next(sendError(400, "invalidPostId"));
 
-  const comments = await Comment.find({ postId: id })
+  let comments = await Comment.find({ postId: id })
     .populate("user", "username profilePicture")
     .sort({ createdAt: -1 }); // Latest comments first
+
+    // Add `isCurrentUser` to each comment owner
+  comments = comments.map((comment) => ({
+    ...comment,
+    user: {
+      ...comment.user,
+      isCurrentUser: userId ? comment.user._id.toString() === userId.toString() : false,
+    },
+  }));
 
   res.status(200).json({
     message: "Comments retrieved successfully",
     comments,
-  });
+  }); 
 };
 
 exports.addPurchaseIntent = async (req, res, next) => {
