@@ -86,7 +86,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // Use API routes BEFORE serving frontend
 app.use("/user", userRoutes);
 app.use("/businessOwner", businessOwnerRoutes);
-app.use("/posts", postRoutes);
+app.use("/postss", postRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/payments", paymentsRouter);
 
