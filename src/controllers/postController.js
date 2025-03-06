@@ -154,84 +154,91 @@ exports.getPosts = async (req, res, next) => {
 
 // Get any post be id
 exports.getPost = async (req, res, next) => {
-  const userId = req.user?.id;
-  const { id } = req.params;
-  
-  // Check if the post ID is valid
-  if (!mongoose.Types.ObjectId.isValid(id))
-    return next(sendError(400, "invalidPostId"));
+  try {
+    const userId = req.user?.id;
+    const { id } = req.params;
 
-  const post = await Post.findById(id)
-    .populate("author", "username profilePicture")
-    .populate("comments", "user text createdAt")
-    .populate({
-      path: "businessOwner",
-      select: "user_id",
-      populate: {
-        path: "user_id",
-        select: "username profilePicture",
-      },
-    });
-  if (!post) return next(sendError(404, "post"));
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return next(sendError(400, "invalidPostId"));
 
-  // Convert to plain JavaScript object after population
-  const plainPost = post.toObject();
+    const post = await Post.findById(id)
+      .populate("author", "username profilePicture")
+      .populate("comments", "user text createdAt")
+      .populate({
+        path: "businessOwner",
+        select: "user_id",
+        populate: {
+          path: "user_id",
+          select: "username profilePicture",
+        },
+      });
 
-  let isOwner = false;
-  let isUser = false;
-  let isLiked = false;
+    if (!post) return next(sendError(404, "post"));
 
-  if (userId) {
-    const user = await User.findById(userId);
+    const plainPost = post.toObject();
 
-    if (user) {
-      isUser = true;
-      isOwner = post.author?._id.toString() === userId.toString(); // Is the author
-      isLiked = post.likes.some((like) => like.equals(userId)); // Check if the current user has liked the post
+    let isOwner = false;
+    let isLiked = false;
+    let followingSet = new Set();
+
+    if (userId) {
+      // Fetch user with following list in a single query
+      const user = await User.findById(userId).select("following").lean();
+      if (user) {
+        isOwner = post.author?._id.toString() === userId.toString();
+        isLiked = post.likes.some((like) => like.equals(userId));
+
+        if (user.following) {
+          followingSet = new Set(user.following.map((id) => id.toString()));
+        }
+
+        // Mark post as viewed
+        await Post.updateOne(
+          { _id: post._id },
+          { $addToSet: { viewedBy: userId } }
+        );
+      }
     }
-  }
 
-  if (isUser) {
-    // Update post by adding user ID to viewedBy array (prevents duplicates)
-    await Post.updateOne(
-      { _id: post._id },
-      { $addToSet: { viewedBy: userId } } // Ensures unique entries
-    );
-  }
-
-  // Add `isCurrentUser` to the author
-  plainPost.author = {
-    ...plainPost.author,
-    isCurrentUser: userId ? plainPost.author?._id.toString() === userId.toString() : false,
-  };
-
-  // Add `isCurrentUser` to the business owner (if available)
-  if (plainPost.businessOwner?.user_id) {
-    plainPost.businessOwner.user_id = {
-      ...plainPost.businessOwner.user_id,
-      isCurrentUser: userId ? plainPost.businessOwner.user_id._id.toString() === userId.toString() : false,
+    // Add `isCurrentUser` and `isFollowed` to author
+    plainPost.author = {
+      ...plainPost.author,
+      isCurrentUser: userId ? plainPost.author?._id.toString() === userId : false,
+      isFollowed: followingSet.has(plainPost.author?._id?.toString()),
     };
+
+    // Add `isCurrentUser` and `isFollowed` to the business owner (if available)
+    if (plainPost.businessOwner?.user_id) {
+      plainPost.businessOwner.user_id = {
+        ...plainPost.businessOwner.user_id,
+        isCurrentUser: userId ? plainPost.businessOwner.user_id._id.toString() === userId : false,
+        isFollowed: followingSet.has(plainPost.businessOwner.user_id?._id?.toString()),
+      };
+    }
+
+    // Add `isCurrentUser` and `isFollowed` to each comment user
+    plainPost.comments = plainPost.comments.map((comment) => ({
+      ...comment,
+      user: {
+        ...comment.user,
+        isCurrentUser: userId ? comment.user._id.toString() === userId : false,
+        isFollowed: followingSet.has(comment.user?._id?.toString()),
+      },
+    }));
+
+    return res.status(200).json({
+      message: "Post retrieved successfully",
+      post: plainPost,
+      isOwner,
+      isLiked,
+      likesCount: plainPost.likes.length,
+      commentsCount: plainPost.comments.length,
+    });
+  } catch (error) {
+    next(error);
   }
-
-  // Add `isCurrentUser` to each comment owner
-  plainPost.comments = plainPost.comments.map((comment) => ({
-    ...comment,
-    user: {
-      ...comment.user,
-      isCurrentUser: userId ? comment.user._id.toString() === userId.toString() : false,
-    },
-  }));
-
-  return res.status(200).json({
-    message: "Post retrieved successfully",
-    post: plainPost,
-    isOwner,
-    isUser, 
-    isLiked,
-    likesCount: plainPost.likes.length, // Likes count
-    commentsCount: plainPost.comments.length, // Comments count
-  });
 };
+
 
 // Get comments for a specific post
 exports.getPostComments = async (req, res, next) => {
@@ -246,19 +253,31 @@ exports.getPostComments = async (req, res, next) => {
     .populate("user", "username profilePicture")
     .sort({ createdAt: -1 }); // Latest comments first
 
-    // Add `isCurrentUser` to each comment owner
-  comments = comments.map((comment) => ({
-    ...comment,
-    user: {
-      ...comment.user,
-      isCurrentUser: userId ? comment.user._id.toString() === userId.toString() : false,
-    },
-  }));
+    let followingSet = new Set();
+
+    // If user is logged in, fetch their following list
+    if (userId) {
+      const user = await User.findById(userId).select("following").lean();
+      if (user?.following) {
+        followingSet = new Set(user.following.map((id) => id.toString()));
+      }
+
+      const userIdString = userId.toString(); // Ensure string format
+
+      comments = comments.map((comment) => ({
+        ...comment,
+        user: {
+          ...comment.user,
+          isCurrentUser: comment.user?._id?.toString() === userIdString,
+          isFollowed: followingSet.has(comment.user?._id?.toString()), // Check if followed
+        },
+      }));
+    }
 
   res.status(200).json({
     message: "Comments retrieved successfully",
     comments,
-  }); 
+  });
 };
 
 exports.addPurchaseIntent = async (req, res, next) => {

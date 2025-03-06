@@ -14,7 +14,6 @@ const scheduleDashboardUpdates = () => {
       
       // Update each dashboard
       for (const owner of businessOwners) {
-        console.log(owner._id)
         await updateDashboardForOwner(owner._id);
       }
       

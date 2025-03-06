@@ -91,6 +91,7 @@ const userSchema = new mongoose.Schema(
         //   message: "Wallet number should be alphanumeric.",
         // },
           default: undefined,
+          set: (value) => (value === "" ? undefined : value),
       },      
       walletType: {
         type: [String],

@@ -30,7 +30,7 @@ const errorMessages = {
   401: {
     default: "Unauthorized. Please log in again.",
     token: "token expired. Please log in again.",
-    currentPassword: "Password is incorrect.",
+    CurrentPassword: "Password is incorrect.",
     Invalidcardinalities: "Invalid email or password. Please try again.",
   },
   403: {

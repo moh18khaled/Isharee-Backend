@@ -6,6 +6,7 @@ const Order = require("../models/order");
 const Notification = require("../models/notification");
 const mongoose = require("mongoose");
 const sendError = require("../utils/sendError");
+const sendVerificationLink = require("../utils/sendVerificationLink");
 const generateAndSetTokens = require("../utils/generateAndSetTokens");
 const clearCookies = require("../utils/clearCookies");
 const singleDeviceLogout = require("../utils/singleDeviceLogout");
@@ -24,7 +25,7 @@ const createNotification = require("../utils/createNotification");
 // Get signup data
 exports.getSignupData = async (req, res, next) => {
   const categories = await Category.find({}, "name").lean(); // Fetch all categories (only name)
-  console.log(User.schema.obj);
+
   return res.status(200).json({
     categories: categories.map((cat) => cat.name), // Send category names only
     heardAboutUs: [
@@ -87,11 +88,10 @@ exports.signup = async (req, res, next) => {
   }
 
   */
-console.log(99999)
-  const existingUser = await User.findOne({ "eWallet.walletNumber": walletNumber });
-if (existingUser) 
-  return next(sendError(400, "WalletNumber"));
-
+  const existingUser = await User.findOne({
+    "eWallet.walletNumber": walletNumber,
+  });
+  if (walletNumber && existingUser) return next(sendError(400, "WalletNumber"));
 
   const newUser = new User({
     username,
@@ -102,23 +102,13 @@ if (existingUser)
     heardAboutUs,
     eWallet: {
       walletNumber: walletNumber, // Allow nullable wallet number
-      walletType:walletTypes, // Array of wallet types
+      walletType: walletTypes, // Array of wallet types
     },
   });
 
-  
   await newUser.save();
 
-  const verificationToken = await generateJWT({ id: newUser.id }, "1h");
-
-  const verificationLink = `${process.env.CLIENT_URL}/verify-account?token=${verificationToken}`;
-
-  await sendEmail(
-    email,
-    "Verify Your Email",
-    `Click the link to verify your email: ${verificationLink}`,
-    `<p>Click <a href="${verificationLink}">here</a> to verify your email.</p>`
-  );
+  await sendVerificationLink(email, newUser.id);
 
   return res.status(201).json({
     message: "User registered! Please verify your email.",
@@ -158,21 +148,16 @@ exports.verifyEmail = async (req, res, next) => {
   }
 };
 
-exports.requestPasswordReset = async (req, res) => {
+exports.requestPasswordReset = async (req, res, next) => {
   const user = await User.findOne({ email: req.body.email.toLowerCase() });
-  if (!user) return res.status(404).json({ message: "user" });
+  if (!user) return next(sendError(404, "user"));
 
   // Generate reset token
-  const resetToken = crypto.randomBytes(32).toString("hex");
-  user.resetPasswordToken = crypto
-    .createHash("sha256")
-    .update(resetToken)
-    .digest("hex");
-  user.resetPasswordExpires = Date.now() + 15 * 60 * 1000; // Token expires in 15 mins
-  await user.save();
+
+  const resetToken = await generateJWT({ id: user._id }, "1h");
+  const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
 
   // Send reset email
-  const resetUrl = `https://yourwebsite.com/reset-password?token=${resetToken}`;
   await sendEmail(
     user.email,
     "Password Reset Request",
@@ -180,6 +165,33 @@ exports.requestPasswordReset = async (req, res) => {
   );
 
   res.status(200).json({ message: "Password reset link sent" });
+};
+
+exports.confirmPasswordReset = async (req, res, next) => {
+  try {
+
+  const { token, newPassword } = req.body;
+  // Verify token
+  console.log(token," ",newPassword);
+
+  const decoded = verifyJWT(token); // Extracts { id }
+  console.log(decoded);
+  if (!decoded) return next(sendError(404, "token"));
+
+  // Find user & update password
+  const user = await User.findById(decoded.id);
+  if (!user) return next(sendError(404, "user"));
+
+  user.password = newPassword;
+  await user.save();
+
+  user.refreshTokens = [];
+  clearCookies(res);
+
+  res.status(200).json({ message: "Password reset successful. Please log in again." });
+} catch (err) {
+  return next(sendError(400, "invalidToken"));
+}
 };
 
 // User login
@@ -251,7 +263,6 @@ exports.getUserAccount = async (req, res, next) => {
     },
   ]);
 
-
   // If the user is a BusinessOwner, fetch mentionedPosts
   let mentionedPosts = [];
   if (userRole === "businessOwner") {
@@ -285,34 +296,29 @@ exports.getUserAccount = async (req, res, next) => {
 
 // Modify user's data
 exports.updateAccount = async (req, res, next) => {
-  const { username, email } = req.body;
+  const { username, profilePictureUrl, profilePicturePublic_id } = req.body;
   const user = await validateUser(req, next);
 
   const duplicateUser = await User.findOne({
-    $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }],
+    username: username.toLowerCase(),
   });
 
   // Validate uniqueness
   if (duplicateUser && duplicateUser.id !== user._id) {
-    if (duplicateUser.email === email || duplicateUser.username === username)
+    if (duplicateUser.username === username)
       return next(sendError(409, "userExists"));
   }
-
-  // Update email if provided
-  if (email) user.email = email;
 
   // Update username if provided
   if (username) user.username = username;
 
   // Update profilePicture
-  if (req.file) {
+  if (profilePictureUrl && profilePicturePublic_id) {
     const oldPublic_id = user.profilePicture.public_id;
-    const path = req.file.path;
-    const result = await cloudinaryUpload(path, "profilePicture", "image");
 
     // Update user with the new profile picture info
-    user.profilePicture.url = result.url;
-    user.profilePicture.public_id = result.public_id;
+    user.profilePicture.url = profilePictureUrl;
+    user.profilePicture.public_id = profilePicturePublic_id;
 
     if (oldPublic_id !== process.env.DEFAULT_PROFILE_PICTURE_PUBLIC_ID) {
       await cloudinaryDelete(oldPublic_id); // Delete the old Picture
@@ -343,15 +349,17 @@ exports.changePassword = async (req, res, next) => {
   if (!user) {
     await session.abortTransaction();
     session.endSession();
-    if (!user) return next(sendError(404, "user"));
+    return next(sendError(404, "user"));
   }
 
   // Check if the current password is correct
-  const isValid = await bcrypt.compare(currentPassword, user.password);
-  if (!isValid) {
+  // Compare the password with the hashed password in the database
+  const isMatch = await user.comparePassword(currentPassword);
+
+  if (!isMatch) {
     await session.abortTransaction();
     session.endSession();
-    return next(sendError(401, "Current password is incorrect."));
+    return next(sendError(401, "CurrentPassword"));
   }
 
   // Update the password
@@ -636,8 +644,6 @@ exports.getOtherUserAccount = async (req, res, next) => {
     },
   ]);
 
-  
-
   let mentionedPosts = [];
   if (user.role === "businessOwner") {
     const businessOwner = await BusinessOwner.findOne({ user_id: userId })
@@ -735,5 +741,148 @@ exports.markAsRead = async (req, res, next) => {
   return res.status(200).json({
     message: "Notification marked as read",
     notification,
+  });
+};
+
+// Get Other User - section
+exports.getOtherUserFollowers = async (req, res, next) => {
+    const currentUserId = req.user?.id;
+    const userId = req.params.id;
+
+    const user = await User.findById(userId).select("followers").lean();
+    if (!user) return next(sendError(404, "User not found"));
+
+    if (user.followers.length === 0) {
+      return res.status(200).json({
+        message: "No followers found for this user.",
+        followers: [],
+      });
+    }
+
+    // Fetch followers' info in a single query
+    const followers = await User.find({ _id: { $in: user.followers } })
+      .select("username profilePicture")
+      .lean();
+
+    let followingSet = new Set();
+
+    if (currentUserId) {
+      const currentUser = await User.findById(currentUserId)
+        .select("following")
+        .lean();
+      if (currentUser?.following?.length) {
+        followingSet = new Set(currentUser.following.map((id) => id.toString()));
+      }
+    }
+
+    // Map followers and add isCurrentUser & isFollowed
+    const updatedFollowers = followers.map((follower) => ({
+      ...follower,
+      isCurrentUser: currentUserId
+        ? follower._id.toString() === currentUserId
+        : false,
+      isFollowed: followingSet.has(follower._id.toString()),
+    }));
+
+    return res.status(200).json({
+      message: "User's followers retrieved successfully",
+      followers: updatedFollowers,
+    });
+
+};
+
+
+exports.getOtherUserFollowing = async (req, res, next) => {
+    const currentUserId = req.user?.id;
+    const userId = req.params.id;
+
+    const user = await User.findById(userId).select("following").lean();
+    if (!user) return next(sendError(404, "User not found"));
+
+    if (user.following.length === 0) {
+      return res.status(200).json({
+        message: "No following found for this user.",
+        following: [],
+      });
+    }
+
+    // Fetch following users' info in a single query
+    const following = await User.find({ _id: { $in: user.following } })
+      .select("username profilePicture")
+      .lean();
+
+    let followersSet = new Set();
+
+    if (currentUserId) {
+      // Fetch logged-in user's followers list
+      const currentUser = await User.findById(currentUserId)
+        .select("followers")
+        .lean();
+
+      if (currentUser?.followers?.length) {
+        followersSet = new Set(
+          currentUser.followers.map((id) => id.toString())
+        );
+      }
+    }
+
+    // Map following and add isCurrentUser & isFollowedByMe
+    const updatedFollowing = following.map((followedUser) => ({
+      ...followedUser,
+      isCurrentUser: currentUserId
+        ? followedUser._id.toString() === currentUserId
+        : false,
+      isFollowedByMe: followersSet.has(followedUser._id.toString()),
+    }));
+
+    return res.status(200).json({
+      message: "User's following retrieved successfully",
+      following: updatedFollowing,
+    });
+};
+
+
+exports.getOtherUserPosts = async (req, res, next) => {
+  const userId = req.params.id;
+
+  const user = await User.findById(userId);
+  if (!user) return next(sendError(404, "user"));
+
+  const posts = await Post.find({ _id: { $in: user.posts } }).sort({
+    createdAt: -1,
+  }); // Sort by latest createdAt (descending)
+
+  if (posts.length === 0) {
+    return res.status(200).json({
+      message: "No posts found for this user.",
+      posts: [],
+    });
+  }
+
+  return res.status(200).json({
+    message: "User's posts retrieved successfully",
+    posts,
+  });
+};
+
+exports.getOtherUserLikedPosts = async (req, res, next) => {
+  const userId = req.params.id;
+
+  const user = await User.findById(userId);
+  if (!user) return next(sendError(404, "user"));
+  console.log(user.likedPosts);
+  const likedPosts = await Post.find({ _id: { $in: user.likedPosts } }).sort({
+    createdAt: -1,
+  }); // Sort by latest createdAt (descending)
+  if (likedPosts.length === 0) {
+    return res.status(200).json({
+      message: "User has not liked any posts.",
+      posts: [],
+    });
+  }
+
+  return res.status(200).json({
+    message: "User's liked posts retrieved successfully",
+    posts: likedPosts,
   });
 };

@@ -24,6 +24,13 @@ router.post(
 router.post("/logout", verifyToken, asyncHandler(userController.logout));
 
 router.get("/verify-email", asyncHandler(userController.verifyEmail));
+
+router.post(
+  "/reset-password",
+  asyncHandler(userController.requestPasswordReset)
+);
+router.post("/reset-password/confirm", asyncHandler(userController.confirmPasswordReset));
+ 
 router.post(
   "/contact",
   validateRequiredFields("emailContent"),
@@ -53,7 +60,7 @@ router.route("/account/posts").get(asyncHandler(userController.getPosts)); // Ge
 
 router
   .route("/account/posts/liked-posts")
-  .get(verifyToken,asyncHandler(userController.getLikedPosts)); // Get posts liked by the user
+  .get(verifyToken, asyncHandler(userController.getLikedPosts)); // Get posts liked by the user
 
 router
   .route("/account/followers")
@@ -69,7 +76,11 @@ router.patch(
   asyncHandler(userController.toggleFollow)
 );
 
-router.get("/account/:id", optionalAuth, asyncHandler(userController.getOtherUserAccount));
+router.get(
+  "/account/:id",
+  optionalAuth,
+  asyncHandler(userController.getOtherUserAccount)
+);
 
 router.get(
   "/account/:id/followers",
@@ -81,9 +92,23 @@ router.get(
   optionalAuth,
   asyncHandler(userController.getOtherUserFollowing)
 );
+router.get(
+  "/account/:id/posts",
+  optionalAuth,
+  asyncHandler(userController.getOtherUserPosts)
+);
+router.get(
+  "/account/:id/liked-posts",
+  optionalAuth,
+  asyncHandler(userController.getOtherUserLikedPosts)
+);
 
 // Get all notifications
-router.get("/notifications", verifyToken, asyncHandler(userController.getNotifications));
+router.get(
+  "/notifications",
+  verifyToken,
+  asyncHandler(userController.getNotifications)
+);
 
 router.patch(
   "notifications/:notificationId",

@@ -4,6 +4,7 @@ const Post = require("../models/post");
 const User = require("../models/user");
 const SearchHistory = require("../models/SearchHistory");
 const Category = require("../models/category");
+const mongoose = require("mongoose");
 const sendError = require("../utils/sendError");
 
 const calculateDashboardMetrics = async (businessOwnerId, next) => {
@@ -35,7 +36,7 @@ const calculateDashboardMetrics = async (businessOwnerId, next) => {
       },
       post_likes: 0,
       total_posts: 0,
-      total_mentions: 0,
+      averageRating:0,
       user_age_demographics: [],
       categories: [],
       businessProfileEngagement: {
@@ -73,6 +74,7 @@ const calculateDashboardMetrics = async (businessOwnerId, next) => {
   let ratingCount = 0;
 
   const categoryEngagement = new Map();
+  const viewedUsersSet = new Set();
 
   posts.forEach(post => {
     totalLikes += post.likes.length;
@@ -84,10 +86,21 @@ const calculateDashboardMetrics = async (businessOwnerId, next) => {
       ratingCount++;
     }
 
+
     if (post.purchaseIntent?.length) {
       totalPurchaseIntents += post.purchaseIntent.length;
       positiveIntents += post.purchaseIntent.filter(p => p.intent === 'yes').length;
     }
+
+
+
+
+
+  post.viewedBy.forEach(user => {
+    viewedUsersSet.add(user._id.toString());
+  });
+
+
 
     post.viewedBy.forEach(user => {
       const userLastActive = user.lastActiveAt || now;
@@ -109,6 +122,8 @@ const calculateDashboardMetrics = async (businessOwnerId, next) => {
       });
     });
   });
+  const viewedUsersArray = Array.from(viewedUsersSet);
+  const averageRating = totalRating/posts.length;
 
   const keywords = await SearchHistory.aggregate([
     { 
@@ -126,19 +141,12 @@ const calculateDashboardMetrics = async (businessOwnerId, next) => {
     { $limit: 10 }
   ]);
 
-  const userAgeGroups = await User.aggregate([
-    {
-      $match: {
-        _id: { $in: Array.from(activeUsers.daily) }
-      }
-    },
-    {
-      $group: {
-        _id: "$ageGroup",
-        frequency: { $sum: 1 }
-      }
-    }
-  ]);
+  const userAgeGroups = viewedUsersArray.length
+  ? await User.aggregate([
+      { $match: { _id: { $in: viewedUsersArray.map(id => new mongoose.Types.ObjectId(id)) } } },
+      { $group: { _id: "$ageGroup", frequency: { $sum: 1 } } }
+    ])
+  : [];
 
   const totalMonthlyUsers = activeUsers.monthly.size;
   const newUsersPercentage = totalMonthlyUsers > 0 ? 
@@ -163,7 +171,7 @@ const calculateDashboardMetrics = async (businessOwnerId, next) => {
     },
     post_likes: totalLikes,
     total_posts: posts.length,
-    total_mentions: posts.length,
+    averageRating,
     user_age_demographics: userAgeGroups.map(group => ({
       age_range: group._id,
       frequency: group.frequency

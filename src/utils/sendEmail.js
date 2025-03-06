@@ -16,8 +16,8 @@ module.exports = asyncHandler(async (to, subject, text, html) => {
     to,
     subject,
     text,
-    html,
+    html, 
   };
-
+console.log(mailOptions, " ",process.env.EMAIL, " ", process.env.EMAIL_PASSWORD);
   await transporter.sendMail(mailOptions);
 });

@@ -26,7 +26,7 @@ const dashboardSchema = new mongoose.Schema({
 
   post_likes: { type: Number, default: 0 },
   total_posts: { type: Number, default: 0 },
-  total_mentions: { type: Number, default: 0 },
+  averageRating: { type: Number, default: 0 },
 
   user_age_demographics: [{
     age_range: String,
