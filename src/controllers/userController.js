@@ -10,15 +10,11 @@ const sendVerificationLink = require("../utils/sendVerificationLink");
 const generateAndSetTokens = require("../utils/generateAndSetTokens");
 const clearCookies = require("../utils/clearCookies");
 const singleDeviceLogout = require("../utils/singleDeviceLogout");
-const path = require("path");
-const bcrypt = require("bcrypt");
-const cloudinaryUpload = require("../utils/cloudinaryUpload");
 const cloudinaryDelete = require("../utils/cloudinaryDelete");
 const validateUser = require("../utils/validateUser");
 const generateJWT = require("../utils/generateJWT");
 const verifyJWT = require("../utils/verifyJWT");
 const validator = require("validator");
-const fs = require("fs");
 const sendEmail = require("../utils/sendEmail");
 const createNotification = require("../utils/createNotification");
 
@@ -169,29 +165,30 @@ exports.requestPasswordReset = async (req, res, next) => {
 
 exports.confirmPasswordReset = async (req, res, next) => {
   try {
+    const { token, newPassword } = req.body;
+    // Verify token
+    console.log(token, " ", newPassword);
 
-  const { token, newPassword } = req.body;
-  // Verify token
-  console.log(token," ",newPassword);
+    const decoded = verifyJWT(token); // Extracts { id }
+    console.log(decoded);
+    if (!decoded) return next(sendError(404, "token"));
 
-  const decoded = verifyJWT(token); // Extracts { id }
-  console.log(decoded);
-  if (!decoded) return next(sendError(404, "token"));
+    // Find user & update password
+    const user = await User.findById(decoded.id);
+    if (!user) return next(sendError(404, "user"));
 
-  // Find user & update password
-  const user = await User.findById(decoded.id);
-  if (!user) return next(sendError(404, "user"));
+    user.password = newPassword;
+    await user.save();
 
-  user.password = newPassword;
-  await user.save();
+    user.refreshTokens = [];
+    clearCookies(res);
 
-  user.refreshTokens = [];
-  clearCookies(res);
-
-  res.status(200).json({ message: "Password reset successful. Please log in again." });
-} catch (err) {
-  return next(sendError(400, "invalidToken"));
-}
+    res
+      .status(200)
+      .json({ message: "Password reset successful. Please log in again." });
+  } catch (err) {
+    return next(sendError(400, "invalidToken"));
+  }
 };
 
 // User login
@@ -226,10 +223,10 @@ exports.login = async (req, res, next) => {
     message: "User successfully logged In",
     data: {
       user: {
-        firstName: user.firstName,
-        lastName: user.lastName,
+        username: user.username,
         email: user.email,
-        profilePicture: user.profilePicture,
+        profilePicture: user.profilePicture.url,
+        role: user.role,
       },
     },
   });
@@ -299,18 +296,16 @@ exports.updateAccount = async (req, res, next) => {
   const { username, profilePictureUrl, profilePicturePublic_id } = req.body;
   const user = await validateUser(req, next);
 
-  const duplicateUser = await User.findOne({
-    username: username.toLowerCase(),
-  });
-
-  // Validate uniqueness
-  if (duplicateUser && duplicateUser.id !== user._id) {
-    if (duplicateUser.username === username)
-      return next(sendError(409, "userExists"));
+  // Check for duplicate username only if a new username is provided
+  if (username && username.toLowerCase() !== user.username) {
+    const duplicateUser = await User.findOne({
+      username: username.toLowerCase(),
+    });
+    if (duplicateUser) {
+      return next(sendError(400, "usernamealreadyTaken"));
+    }
+    user.username = username.toLowerCase();
   }
-
-  // Update username if provided
-  if (username) user.username = username;
 
   // Update profilePicture
   if (profilePictureUrl && profilePicturePublic_id) {
@@ -746,101 +741,96 @@ exports.markAsRead = async (req, res, next) => {
 
 // Get Other User - section
 exports.getOtherUserFollowers = async (req, res, next) => {
-    const currentUserId = req.user?.id;
-    const userId = req.params.id;
+  const currentUserId = req.user?.id;
+  const userId = req.params.id;
 
-    const user = await User.findById(userId).select("followers").lean();
-    if (!user) return next(sendError(404, "User not found"));
+  const user = await User.findById(userId).select("followers").lean();
+  if (!user) return next(sendError(404, "User not found"));
 
-    if (user.followers.length === 0) {
-      return res.status(200).json({
-        message: "No followers found for this user.",
-        followers: [],
-      });
-    }
-
-    // Fetch followers' info in a single query
-    const followers = await User.find({ _id: { $in: user.followers } })
-      .select("username profilePicture")
-      .lean();
-
-    let followingSet = new Set();
-
-    if (currentUserId) {
-      const currentUser = await User.findById(currentUserId)
-        .select("following")
-        .lean();
-      if (currentUser?.following?.length) {
-        followingSet = new Set(currentUser.following.map((id) => id.toString()));
-      }
-    }
-
-    // Map followers and add isCurrentUser & isFollowed
-    const updatedFollowers = followers.map((follower) => ({
-      ...follower,
-      isCurrentUser: currentUserId
-        ? follower._id.toString() === currentUserId
-        : false,
-      isFollowed: followingSet.has(follower._id.toString()),
-    }));
-
+  if (user.followers.length === 0) {
     return res.status(200).json({
-      message: "User's followers retrieved successfully",
-      followers: updatedFollowers,
+      message: "No followers found for this user.",
+      followers: [],
     });
+  }
 
+  // Fetch followers' info in a single query
+  const followers = await User.find({ _id: { $in: user.followers } })
+    .select("username profilePicture")
+    .lean();
+
+  let followingSet = new Set();
+
+  if (currentUserId) {
+    const currentUser = await User.findById(currentUserId)
+      .select("following")
+      .lean();
+    if (currentUser?.following?.length) {
+      followingSet = new Set(currentUser.following.map((id) => id.toString()));
+    }
+  }
+
+  // Map followers and add isCurrentUser & isFollowed
+  const updatedFollowers = followers.map((follower) => ({
+    ...follower,
+    isCurrentUser: currentUserId
+      ? follower._id.toString() === currentUserId
+      : false,
+    isFollowed: followingSet.has(follower._id.toString()),
+  }));
+
+  return res.status(200).json({
+    message: "User's followers retrieved successfully",
+    followers: updatedFollowers,
+  });
 };
-
 
 exports.getOtherUserFollowing = async (req, res, next) => {
-    const currentUserId = req.user?.id;
-    const userId = req.params.id;
+  const currentUserId = req.user?.id;
+  const userId = req.params.id;
 
-    const user = await User.findById(userId).select("following").lean();
-    if (!user) return next(sendError(404, "User not found"));
+  const user = await User.findById(userId).select("following").lean();
+  if (!user) return next(sendError(404, "User not found"));
 
-    if (user.following.length === 0) {
-      return res.status(200).json({
-        message: "No following found for this user.",
-        following: [],
-      });
-    }
+  if (user.following.length === 0) {
+    return res.status(200).json({
+      message: "No following found for this user.",
+      following: [],
+    });
+  }
 
-    // Fetch following users' info in a single query
-    const following = await User.find({ _id: { $in: user.following } })
-      .select("username profilePicture")
+  // Fetch following users' info in a single query
+  const following = await User.find({ _id: { $in: user.following } })
+    .select("username profilePicture")
+    .lean();
+
+  let followersSet = new Set();
+
+  if (currentUserId) {
+    // Fetch logged-in user's followers list
+    const currentUser = await User.findById(currentUserId)
+      .select("followers")
       .lean();
 
-    let followersSet = new Set();
-
-    if (currentUserId) {
-      // Fetch logged-in user's followers list
-      const currentUser = await User.findById(currentUserId)
-        .select("followers")
-        .lean();
-
-      if (currentUser?.followers?.length) {
-        followersSet = new Set(
-          currentUser.followers.map((id) => id.toString())
-        );
-      }
+    if (currentUser?.followers?.length) {
+      followersSet = new Set(currentUser.followers.map((id) => id.toString()));
     }
+  }
 
-    // Map following and add isCurrentUser & isFollowedByMe
-    const updatedFollowing = following.map((followedUser) => ({
-      ...followedUser,
-      isCurrentUser: currentUserId
-        ? followedUser._id.toString() === currentUserId
-        : false,
-      isFollowedByMe: followersSet.has(followedUser._id.toString()),
-    }));
+  // Map following and add isCurrentUser & isFollowedByMe
+  const updatedFollowing = following.map((followedUser) => ({
+    ...followedUser,
+    isCurrentUser: currentUserId
+      ? followedUser._id.toString() === currentUserId
+      : false,
+    isFollowedByMe: followersSet.has(followedUser._id.toString()),
+  }));
 
-    return res.status(200).json({
-      message: "User's following retrieved successfully",
-      following: updatedFollowing,
-    });
+  return res.status(200).json({
+    message: "User's following retrieved successfully",
+    following: updatedFollowing,
+  });
 };
-
 
 exports.getOtherUserPosts = async (req, res, next) => {
   const userId = req.params.id;

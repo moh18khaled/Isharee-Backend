@@ -20,6 +20,7 @@ const errorMessages = {
     searchQuery:"Search query is required",
     noToken:"Token is required",
     invalidToken:"Invalid or expired token",
+    usernamealreadyTaken:"Username is already taken",
     alreadyVerified:"Email already verified",
     alreadySubscribed:"User already subscribed",
     WalletNumber:"Wallet number is already in use. Please choose a different one.",

@@ -203,7 +203,9 @@ exports.getPost = async (req, res, next) => {
     // Add `isCurrentUser` and `isFollowed` to author
     plainPost.author = {
       ...plainPost.author,
-      isCurrentUser: userId ? plainPost.author?._id.toString() === userId : false,
+      isCurrentUser: userId
+        ? plainPost.author?._id.toString() === userId
+        : false,
       isFollowed: followingSet.has(plainPost.author?._id?.toString()),
     };
 
@@ -211,8 +213,12 @@ exports.getPost = async (req, res, next) => {
     if (plainPost.businessOwner?.user_id) {
       plainPost.businessOwner.user_id = {
         ...plainPost.businessOwner.user_id,
-        isCurrentUser: userId ? plainPost.businessOwner.user_id._id.toString() === userId : false,
-        isFollowed: followingSet.has(plainPost.businessOwner.user_id?._id?.toString()),
+        isCurrentUser: userId
+          ? plainPost.businessOwner.user_id._id.toString() === userId
+          : false,
+        isFollowed: followingSet.has(
+          plainPost.businessOwner.user_id?._id?.toString()
+        ),
       };
     }
 
@@ -239,7 +245,6 @@ exports.getPost = async (req, res, next) => {
   }
 };
 
-
 // Get comments for a specific post
 exports.getPostComments = async (req, res, next) => {
   const userId = req.user?.id;
@@ -253,26 +258,28 @@ exports.getPostComments = async (req, res, next) => {
     .populate("user", "username profilePicture")
     .sort({ createdAt: -1 }); // Latest comments first
 
-    let followingSet = new Set();
+  let followingSet = new Set();
+  const userIdString = userId?.toString() || null;
 
-    // If user is logged in, fetch their following list
-    if (userId) {
-      const user = await User.findById(userId).select("following").lean();
-      if (user?.following) {
-        followingSet = new Set(user.following.map((id) => id.toString()));
-      }
-
-      const userIdString = userId.toString(); // Ensure string format
-
-      comments = comments.map((comment) => ({
-        ...comment,
-        user: {
-          ...comment.user,
-          isCurrentUser: comment.user?._id?.toString() === userIdString,
-          isFollowed: followingSet.has(comment.user?._id?.toString()), // Check if followed
-        },
-      }));
+  // If user is logged in, fetch their following list
+  if (userIdString) {
+    const user = await User.findById(userIdString).select("following").lean();
+    if (user?.following) {
+      followingSet = new Set(user.following.map((id) => id.toString()));
     }
+  }
+
+  comments = comments.map((comment) => {
+    const commentUserId = comment.user?._id?.toString() || null;
+    return {
+      ...comment,
+      user: {
+        ...comment.user,
+        isCurrentUser: commentUserId === userIdString,
+        isFollowed: followingSet.has(commentUserId),
+      },
+    };
+  });
 
   res.status(200).json({
     message: "Comments retrieved successfully",
@@ -313,7 +320,15 @@ exports.updatePost = async (req, res, next) => {
   const user = await validateUser(req, next);
   const post = await validatePost(req, next);
 
-  const { title, content, categories } = req.body; // Get updated post data
+  const {
+    title,
+    content,
+    imageUrl,
+    imagePublicId,
+    videoUrl,
+    videoPublicId,
+    categories,
+  } = req.body; // Get updated post data
 
   // Ensure the logged-in user is the author of the post
   if (post.author.toString() !== user._id.toString()) {
@@ -337,37 +352,24 @@ exports.updatePost = async (req, res, next) => {
   post.content = content || post.content;
 
   // Handle the image and video uploads if needed (similar to addPost)
-  const image = req.files?.image;
-  const video = req.files?.video;
 
-  if (image) {
+  if (imageUrl && imagePublicId) {
     const oldPublic_id = post.image.public_id;
-    // Handle image upload (similar to addPost)
-    const imageResult = await cloudinaryUpload(
-      image[0].path,
-      "postPicture",
-      "image"
-    );
-    post.image.url = imageResult.url;
-    post.image.public_id = imageResult.public_id;
+
+    post.image.url = imageUrl;
+    post.image.public_id = imagePublicId;
 
     if (oldPublic_id !== process.env.DEFAULT_PROFILE_PICTURE_PUBLIC_ID) {
-      await cloudinaryDelete(oldPublic_id); // Delete the old Picture
+      await cloudinaryDelete(oldPublic_id);
     }
-
-    fs.unlinkSync(image[0].path);
   }
 
-  if (video) {
-    // Handle video upload (if a video file is present)
-    const videoResult = await cloudinaryUpload(
-      video[0].path,
-      "postVideo",
-      "video"
-    );
-    post.video.url = videoResult.url;
-    post.video.public_id = videoResult.public_id;
-    fs.unlinkSync(video[0].path);
+  if (videoUrl && videoPublicId) {
+    const oldPublic_id = post.video.public_id;
+
+    post.video.url = videoUrl;
+    post.video.public_id = videoPublicId;
+    await cloudinaryDelete(oldPublic_id);
   }
 
   // Save the updated post
