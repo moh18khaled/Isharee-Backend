@@ -4,8 +4,8 @@ const mongoose = require("mongoose");
 const userRoutes = require("./routes/userRoutes");
 const businessOwnerRoutes = require("./routes/businessOwnerRoutes");
 const postRoutes = require("./routes/postRoutes");
-const paymentsRouter =require("./routes/paymentsRouter");
-const dashboardRoutes =require("./routes/dashboardRoutes"); 
+const paymentsRouter = require("./routes/paymentsRouter");
+const dashboardRoutes = require("./routes/dashboardRoutes");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const AppError = require("./utils/AppError");
@@ -23,7 +23,6 @@ const app = express();
 
 // Serve frontend only AFTER API routes
 app.use(express.static(path.join(__dirname, "client", "dist")));
-
 
 app.use(express.json());
 app.use(cookieParser());
@@ -50,7 +49,6 @@ app.use(
   })
 );
 
-
 // Middleware
 app.use(morgan("dev"));
 app.use(express.urlencoded({ extended: false }));
@@ -70,7 +68,11 @@ app.use(
     directives: {
       "default-src": ["'self'"],
       "img-src": ["*"], // Allows images from any source
-      "connect-src": ["'self'", "https://isharee-backend-production.up.railway.app"], // Allow backend API requests
+      "connect-src": [
+        "'self'",
+        "https://isharee-backend-production.up.railway.app",
+        "https://api.cloudinary.com",
+      ], // Allow backend API requests
     },
   })
 );
@@ -95,18 +97,16 @@ app.get("/", (req, res) => {
   res.send("Welcome to the iSharee Backend!");
 });
 
-
 // Global Error Handling
 app.use(globalError);
 
-app.get('*', (req, res) => {
-     res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
 });
 
 // Handle Invalid API Routes
 app.all("*", (req, res, next) => {
   next(new AppError("Cannot find this route", 404));
 });
-
 
 module.exports = app;

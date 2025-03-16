@@ -50,8 +50,8 @@ const postSchema = new mongoose.Schema(
     rating: {
       type: Number,
       required: true,
-      min: 1,
-      max: 5,
+      min: [1, "Rating must be between 1 and 5."],
+      max: [5, "Rating must be between 1 and 5."],
     },
     businessOwner: {
       type: mongoose.Schema.Types.ObjectId,
