@@ -7,7 +7,7 @@ const requiredFieldsByEntity = {
     "username", "email", "password", "age",
     "businessName", "categories", "address", "phoneNumber"
   ],
-  post: ["title", "content", "imageUrl", "imagePublicId", "businessName", "rating"],
+  post: ["title", "content","businessName", "rating"],
   emailContent: ["name", "email", "subject", "message"],
 };
 

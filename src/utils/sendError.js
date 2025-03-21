@@ -5,6 +5,7 @@ const errorMessages = {
     default: "Bad request.",
     cannotMake:"Can't make this action",
     missingFields: "All fields are required.",
+    imageOrVideo:"You must upload at least an image, a video, or both.",
     invalidCategories: "Some categories do not exist in the system.",
     invalidId: "Invalid ID format.",
     invalidUserId: "Invalid user ID.",

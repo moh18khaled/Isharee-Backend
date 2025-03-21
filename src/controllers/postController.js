@@ -30,8 +30,10 @@ exports.addPost = async (req, res, next) => {
     rating,
   } = req.body;
 
-  const image = { url: imageUrl, public_id: imagePublicId };
+  const image = imageUrl ? { url: imageUrl, public_id: imagePublicId } : null;
   const video = videoUrl ? { url: videoUrl, public_id: videoPublicId } : null;
+
+  if (!image && !video) return next(sendError(400, "imageOrVideo"));
 
   const businessOwner = await BusinessOwner.findOne({
     businessName: { $regex: businessName, $options: "i" },
@@ -485,8 +487,7 @@ exports.deletePost = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   if (post.video.public_id) await cloudinaryDelete(post.video.public_id);
-
-  await cloudinaryDelete(post.image.public_id);
+  if (post.image.public_id) await cloudinaryDelete(post.image.public_id);
 
   // Remove the post reference from the user's likedPosts and posts
   await User.updateMany(
