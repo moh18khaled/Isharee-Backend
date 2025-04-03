@@ -62,7 +62,7 @@ const errorMessages = {
     default: "Conflict.",
     userExists: "Email or username already in use",
     InvalidCredentials: "Invalid credentials or data",
-    businessOwnerExists: "Email , username or businessName already in use",
+    businessOwnerExists: "Email or businessName already in use",
   },
   500: {
     default: "Conflict.",

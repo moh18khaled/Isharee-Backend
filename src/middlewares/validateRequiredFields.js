@@ -4,10 +4,15 @@ const sendError = require("../utils/sendError");
 const requiredFieldsByEntity = {
   user: ["username", "email", "password", "age", "interests", "heardAboutUs"],
   businessOwner: [
-    "username", "email", "password", "age",
-    "businessName", "categories", "address", "phoneNumber"
+    "email",
+    "password",
+    "age",
+    "businessName",
+    "categories",
+    "address",
+    "phoneNumber",
   ],
-  post: ["title", "content","businessName", "rating"],
+  post: ["title", "content", "businessName", "rating", "categories"],
   emailContent: ["name", "email", "subject", "message"],
 };
 
@@ -17,7 +22,6 @@ const requiredFieldsByEntity = {
 const validateRequiredFields = (entityType) => {
   return (req, res, next) => {
 
-    console.log(req.body);
     const requiredFields = requiredFieldsByEntity[entityType];
 
     // Check for missing fields

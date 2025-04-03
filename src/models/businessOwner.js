@@ -15,6 +15,16 @@ const businessOwnerSchema = new mongoose.Schema({
     unique: true,
     trim: true,
   },
+  websiteUrl: {
+    type: String,
+    validate: {
+      validator: function (value) {
+        if (!value) return true; 
+        return /^(https?:\/\/)[\w\-]+(\.[\w\-]+)+[/#?]?.*$/.test(value);
+      },
+      message: (props) => `${props.value} must start with http:// or https://`,
+    },
+  },  
   categories: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }], // Array of categories
   address: {
     country: { type: String, required: true },

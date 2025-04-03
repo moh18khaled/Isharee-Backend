@@ -6,8 +6,13 @@ const seedCategories = async () => {
 
     // Create new categories
     const categories = [
-      { name: 'Technology' },
-      { name: 'Web Development' },
+      { name: 'Dining' },
+      { name: 'Healthcare' },
+      { name: 'Education' },
+      { name: 'Fashion' },
+      { name: 'Movies' },
+      { name: 'Books' },
+
     ];
     await Category.insertMany(categories);
 

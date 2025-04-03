@@ -28,6 +28,7 @@ exports.addPost = async (req, res, next) => {
     videoPublicId,
     businessName,
     rating,
+    categories,
   } = req.body;
 
   const image = imageUrl ? { url: imageUrl, public_id: imagePublicId } : null;
@@ -39,16 +40,11 @@ exports.addPost = async (req, res, next) => {
     businessName: { $regex: businessName, $options: "i" },
   });
 
-  if (!businessOwner) {
-    return next(sendError(404, "BusinessName"));
-  }
+  // Fetch categories from DB to ensure valid references
+  const categoryDocs = await Category.find({ name: { $in: categories } });
 
   const session = await mongoose.startSession();
   session.startTransaction();
-
-  const categories = await Category.find({
-    _id: { $in: businessOwner.categories },
-  });
 
   // Create the post
   const post = new Post({
@@ -57,28 +53,35 @@ exports.addPost = async (req, res, next) => {
     content,
     image,
     ...(video && { video }), // Add video only if it exists
-    businessOwner: businessOwner._id,
-    categories: categories.map((cat) => cat._id), // Link categories from BusinessOwner
+    businessOwner: businessOwner?.id || null,
+    categories: categoryDocs.map((cat) => cat._id),
     rating,
   });
+
+  /* 
+    in last version: 
+
+    categories: categories.map((cat) => cat._id), // Link categories from BusinessOwner
+
+
+    if (!businessOwner) {
+    return next(sendError(404, "BusinessName"));
+  }
+
+  */
 
   // Save the post and update user data in parallel
 
   user.posts.push(post._id);
-  businessOwner.mentionedPosts.push(post._id);
+  if (businessOwner) businessOwner.mentionedPosts.push(post._id);
 
   // Add post to each category
-  categories.forEach((category) => category.posts.push(post._id));
-
-  await post.save({ session });
-  await user.save({ session });
-  await businessOwner.save({ session });
-
+  categoryDocs.forEach((category) => category.posts.push(post._id));
   await Promise.all([
     post.save({ session }),
     user.save({ session }),
-    businessOwner.save({ session }),
-    ...categories.map((category) => category.save({ session })), // Ensure each category uses session
+    ...(businessOwner ? [businessOwner.save({ session })] : []),
+    ...categoryDocs.map((category) => category.save({ session })),
   ]);
 
   await session.commitTransaction();
@@ -91,8 +94,7 @@ exports.addPost = async (req, res, next) => {
       content,
       image,
       video: video || null,
-      businessOwner: businessOwner._id,
-      categories: businessOwner.categories.map((cat) => cat._id),
+      categories: categoryDocs.map((cat) => cat.name), // Return category names
       rating,
     },
   });
@@ -168,10 +170,10 @@ exports.getPost = async (req, res, next) => {
       .populate("comments", "user text createdAt")
       .populate({
         path: "businessOwner",
-        select: "user_id",
+        select: "user_id businessName", // Include businessName directly
         populate: {
           path: "user_id",
-          select: "username profilePicture",
+          select: "businessName profilePicture",
         },
       });
 
@@ -529,25 +531,46 @@ exports.deletePost = async (req, res, next) => {
 
 // Search for posts by title or content
 exports.searchPosts = async (req, res, next) => {
-  const { query } = req.query;
+  const { query, categoryNames } = req.query; // Expect categoryNames instead of categoryIds
 
-  if (!query) {
+  if (!query && !categoryNames) {
     return next(sendError(400, "searchQuery"));
   }
 
-  const posts = await Post.find({
-    $or: [
-      { title: { $regex: query, $options: "i" } }, // Case-insensitive title search
-      { content: { $regex: query, $options: "i" } }, // Case-insensitive content search
-      {
-        categories: {
-          $in: await Category.find({
-            name: { $regex: query, $options: "i" },
-          }).distinct("_id"), // Matching category IDs
+ let categoryIds = [];
+ let finalFilter = {};
+
+  // Convert category names to IDs if categoryNames exist
+  if (categoryNames) {
+    categoryIds = await Category.find({
+      name: { $in: categoryNames.split(",") },
+    }).distinct("_id");
+  }
+
+  if (query && categoryNames) {
+    finalFilter = {
+      $and: [
+        { categories: { $in: categoryIds } }, // Category filter
+        {
+          $or: [
+            { title: { $regex: query, $options: "i" } },
+            { content: { $regex: query, $options: "i" } },
+          ],
         },
-      }, // Search by category name
-    ],
-  })
+      ],
+    };
+  } else if (query) {
+    finalFilter = {
+      $or: [
+        { title: { $regex: query, $options: "i" } },
+        { content: { $regex: query, $options: "i" } },
+      ],
+    };
+  } else if (categoryNames) {
+    finalFilter = { categories: { $in: categoryIds } };
+  }
+
+  const posts = await Post.find(finalFilter)
     .populate("author", "username profilePicture")
     .populate("categories", "name")
     .lean();

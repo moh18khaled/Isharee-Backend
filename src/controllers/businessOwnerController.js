@@ -4,24 +4,24 @@ const Category = require("../models/category");
 const mongoose = require("mongoose");
 const generateJWT = require("../utils/generateJWT");
 const sendError = require("../utils/sendError");
+const sendVerificationLink = require("../utils/sendVerificationLink");
 const sendEmail = require("../utils/sendEmail");
 
 const generateAndSetTokens = require("../utils/generateAndSetTokens");
 
 // Get business names with active subscriptions
 exports.getBusinessNames = async (req, res, next) => {
-    const businessOwners = await BusinessOwner.find(
-      { subscriptionActive: true }, // Filter only active subscriptions
-      "businessName" // Retrieve only businessName
-    ).lean(); // Convert Mongoose documents to plain objects
+  const businessOwners = await BusinessOwner.find(
+    { subscriptionActive: true }, // Filter only active subscriptions
+    "businessName" // Retrieve only businessName
+  ).lean(); // Convert Mongoose documents to plain objects
 
-    const businessNames = businessOwners.map((business) => business.businessName); // Extract only the names
+  const businessNames = businessOwners.map((business) => business.businessName); // Extract only the names
 
-    return res.status(200).json({
-      businessNames, // Return as an array of strings
-    });
+  return res.status(200).json({
+    businessNames, // Return as an array of strings
+  });
 };
-
 
 exports.getSignupData = async (req, res, next) => {
   try {
@@ -37,7 +37,6 @@ exports.getSignupData = async (req, res, next) => {
 
 exports.signup = async (req, res, next) => {
   const {
-    username,
     email,
     password,
     age,
@@ -46,25 +45,26 @@ exports.signup = async (req, res, next) => {
     address,
     phoneNumber,
     description,
+    websiteUrl,
   } = req.body;
-
+ 
   // Start a database transaction
   const session = await mongoose.startSession();
-
+ 
   session.startTransaction();
 
-  const oldUser = await User.findOne({
-    $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }],
-  }).session(session);
+  const oldUser = await User.findOne({ email: email.toLowerCase() }).session(
+    session
+  );
   const oldBusinessOwner = await BusinessOwner.findOne({
-    businessName:businessName.toLowerCase() ,
+    businessName: businessName.toLowerCase(),
   }).session(session);
   if (oldBusinessOwner || oldUser) {
     await session.abortTransaction();
     session.endSession();
     return next(sendError(409, "businessOwnerExists"));
   }
-/*
+  /*
   // Step 1: Validate all categories exist
   const existingCategories = await Category.find({
     name: { $in: categories },
@@ -83,8 +83,8 @@ exports.signup = async (req, res, next) => {
 
   */
 
-   // Step 2: Find existing categories from DB
-   const existingCategories = await Category.find({
+  // Step 2: Find existing categories from DB
+  const existingCategories = await Category.find({
     name: { $in: categories },
   }).session(session);
 
@@ -105,16 +105,20 @@ exports.signup = async (req, res, next) => {
     );
     newCategoryIds = newCategories.map((cat) => cat._id);
   }
+  console.log("ss");
+
 
   // Step 1: Create User
   const newUser = new User({
-    username,
     email,
     password,
     age,
     role: "businessOwner",
   });
+  console.log(newUser);
+
   await newUser.save({ session });
+  console.log("ssdddq");
 
   // Step 2: Create BusinessOwner
   const newBusinessOwner = new BusinessOwner({
@@ -124,6 +128,7 @@ exports.signup = async (req, res, next) => {
     address,
     phoneNumber,
     description,
+    websiteUrl,
   });
   await newBusinessOwner.save({ session });
 
@@ -131,23 +136,15 @@ exports.signup = async (req, res, next) => {
   await session.commitTransaction();
   session.endSession();
 
-  const verificationToken = await generateJWT({ id: newUser.id }, "1h");
-
-  const verificationLink = `${process.env.CLIENT_URL}/verify-account?token=${verificationToken}`;
-
-  await sendEmail(
-    email,
-    "Verify Your Email",
-    `Click the link to verify your email: ${verificationLink}`,
-    `<p>Click <a href="${verificationLink}">here</a> to verify your email.</p>`
-  );
+  await sendVerificationLink(email, newUser.id);
 
   res.status(201).json({
     message: "Business owner registered! Please verify your email.",
-    user: { id: newUser._id, username: newUser.username },
+    user: { id: newUser._id },
     businessOwner: {
       id: newBusinessOwner._id,
       businessName: newBusinessOwner.businessName,
+      websiteUrl,
     },
   });
 };

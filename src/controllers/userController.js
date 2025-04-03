@@ -262,16 +262,23 @@ exports.getUserAccount = async (req, res, next) => {
 
   // If the user is a BusinessOwner, fetch mentionedPosts
   let mentionedPosts = [];
+  let businessDetails = null;
+
   if (userRole === "businessOwner") {
     const businessOwner = await BusinessOwner.findOne({ user_id: userId })
-      .populate({
-        path: "mentionedPosts",
-        select: "title image.url", // Only get title and image URL
-      })
+      .select("mentionedPosts businessName address phoneNumber websiteUrl")
+      .populate("mentionedPosts", "title content image.url")
       .lean();
 
     if (businessOwner) {
-      mentionedPosts = businessOwner.mentionedPosts;
+      mentionedPosts = businessOwner.mentionedPosts || [];
+      businessDetails = {
+        address: businessOwner.address.country,
+        phoneNumber: businessOwner.phoneNumber,
+        websiteUrl: businessOwner.websiteUrl,
+        email: user.email,
+        businessName: businessOwner.businessName,
+      };
     }
   }
 
@@ -287,6 +294,7 @@ exports.getUserAccount = async (req, res, next) => {
       followingCount: counts?.followingCount || 0,
       followersCount: counts?.followersCount || 0,
       mentionedPosts,
+      businessDetails,
     },
   });
 };
@@ -549,9 +557,30 @@ exports.getFollowers = async (req, res, next) => {
     .select("username profilePicture")
     .lean();
 
+  // Fetch business owners from the BusinessOwner collection
+  const businessOwners = await BusinessOwner.find({
+    user_id: { $in: user.followers },
+  })
+    .select("user_id businessName")
+    .lean();
+
+  // Create a mapping of business owners
+  const businessOwnerMap = new Map(
+    businessOwners.map((bo) => [bo.user_id.toString(), bo.businessName])
+  );
+
+  // Format response
+  const formattedFollowers = followers.map((follower) => ({
+    _id: follower._id,
+    profilePicture: follower.profilePicture,
+    name: businessOwnerMap.has(follower._id.toString())
+      ? businessOwnerMap.get(follower._id.toString())
+      : follower.username,
+  }));
+
   return res.status(200).json({
     message: "User's followers retrieved successfully",
-    followers,
+    followers: formattedFollowers,
   });
 };
 
@@ -569,9 +598,30 @@ exports.getFollowing = async (req, res, next) => {
     .select("username profilePicture")
     .lean();
 
+  // Fetch business owners from the BusinessOwner collection
+  const businessOwners = await BusinessOwner.find({
+    user_id: { $in: user.following },
+  })
+    .select("user_id businessName")
+    .lean();
+
+  // Create a mapping of business owners
+  const businessOwnerMap = new Map(
+    businessOwners.map((bo) => [bo.user_id.toString(), bo.businessName])
+  );
+
+  // Format response
+  const formattedFollowing = following.map((follow) => ({
+    _id: follow._id,
+    profilePicture: follow.profilePicture,
+    username: businessOwnerMap.has(follow._id.toString())
+      ? businessOwnerMap.get(follow._id.toString())
+      : follow.username,
+  }));
+
   return res.status(200).json({
     message: "User's following retrieved successfully",
-    following,
+    following: formattedFollowing,
   });
 };
 
@@ -612,8 +662,8 @@ exports.toggleFollow = async (req, res, next) => {
 
 // Get other user account
 exports.getOtherUserAccount = async (req, res, next) => {
+  const currentUserId = req.user?.id;
   const userId = req.params.id;
-
   if (!mongoose.Types.ObjectId.isValid(userId))
     return next(sendError(400, "invalidUserId"));
 
@@ -622,8 +672,16 @@ exports.getOtherUserAccount = async (req, res, next) => {
   }
 
   const user = await User.findById(userId)
-    .select("username profilePicture.url role subscriptionActive")
+    .select(
+      "username profilePicture.url followers email role subscriptionActive"
+    )
     .lean();
+
+  let isFollowing = false;
+  if (currentUserId)
+    isFollowing = user.followers.some(
+      (follower) => follower.toString() === currentUserId.toString()
+    );
 
   if (!user) return next(sendError(404, "user"));
 
@@ -640,16 +698,28 @@ exports.getOtherUserAccount = async (req, res, next) => {
   ]);
 
   let mentionedPosts = [];
+  let businessDetails = null;
+
+  // If BusinessOwner and subscription is active, fetch mentionedPosts in the same query
   if (user.role === "businessOwner") {
     const businessOwner = await BusinessOwner.findOne({ user_id: userId })
-      .populate({
-        path: "mentionedPosts",
-        select: "title image.url", // Only get title and image URL
-      })
+      .select(
+        "mentionedPosts businessName address phoneNumber websiteUrl subscriptionActive"
+      )
+      .populate("mentionedPosts", "title content image.url")
       .lean();
-
+    console.log(user.role, " ", businessOwner.subscriptionActive);
+    console.log(user.email);
     if (businessOwner) {
-      mentionedPosts = businessOwner.mentionedPosts;
+      businessDetails = {
+        address: businessOwner.address.country,
+        phoneNumber: businessOwner.phoneNumber,
+        websiteUrl: businessOwner.websiteUrl,
+        email: user.email,
+        businessName: businessOwner.businessName,
+      };
+      if (businessOwner.subscriptionActive)
+        mentionedPosts = businessOwner.mentionedPosts || [];
     }
   }
 
@@ -664,17 +734,10 @@ exports.getOtherUserAccount = async (req, res, next) => {
     followingCount: counts?.followingCount || 0,
     followersCount: counts?.followersCount || 0,
     mentionedPosts,
+    businessDetails,
+    isUser: currentUserId ? true : false,
+    isFollowing,
   };
-
-  // If BusinessOwner and subscription is active, fetch mentionedPosts in the same query
-  if (user.role === "BusinessOwner" && user.subscriptionActive) {
-    const businessOwner = await BusinessOwner.findById(userId)
-      .select("mentionedPosts")
-      .populate("mentionedPosts", "title content image.url")
-      .lean();
-
-    responseData.mentionedPosts = businessOwner?.mentionedPosts || [];
-  }
 
   return res.status(200).json({ success: true, data: responseData });
 };
@@ -759,29 +822,30 @@ exports.getOtherUserFollowers = async (req, res, next) => {
     .select("username profilePicture")
     .lean();
 
-  let followingSet = new Set();
+  // Fetch business owners from the BusinessOwner collection
+  const businessOwners = await BusinessOwner.find({
+    user_id: { $in: user.followers },
+  })
+    .select("user_id businessName")
+    .lean();
+  // Create a mapping of business owners
+  const businessOwnerMap = new Map(
+    businessOwners.map((bo) => [bo.user_id.toString(), bo.businessName])
+  );
 
-  if (currentUserId) {
-    const currentUser = await User.findById(currentUserId)
-      .select("following")
-      .lean();
-    if (currentUser?.following?.length) {
-      followingSet = new Set(currentUser.following.map((id) => id.toString()));
-    }
-  }
-
-  // Map followers and add isCurrentUser & isFollowed
-  const updatedFollowers = followers.map((follower) => ({
-    ...follower,
-    isCurrentUser: currentUserId
-      ? follower._id.toString() === currentUserId
-      : false,
-    isFollowed: followingSet.has(follower._id.toString()),
+  // Format response
+  const formattedFollowers = followers.map((follower) => ({
+    _id: follower._id,
+    profilePicture: follower.profilePicture,
+    username: businessOwnerMap.has(follower._id.toString())
+      ? businessOwnerMap.get(follower._id.toString())
+      : follower.username,
+      isCurrentUser: follower._id.toString() === currentUserId.toString(), // Compare the follower ID with the current user's ID
   }));
 
   return res.status(200).json({
     message: "User's followers retrieved successfully",
-    followers: updatedFollowers,
+    followers: formattedFollowers,
   });
 };
 
@@ -804,31 +868,30 @@ exports.getOtherUserFollowing = async (req, res, next) => {
     .select("username profilePicture")
     .lean();
 
-  let followersSet = new Set();
+  // Fetch business owners from the BusinessOwner collection
+  const businessOwners = await BusinessOwner.find({
+    user_id: { $in: user.following },
+  })
+    .select("user_id businessName")
+    .lean();
 
-  if (currentUserId) {
-    // Fetch logged-in user's followers list
-    const currentUser = await User.findById(currentUserId)
-      .select("followers")
-      .lean();
+  // Create a mapping of business owners
+  const businessOwnerMap = new Map(
+    businessOwners.map((bo) => [bo.user_id.toString(), bo.businessName])
+  );
 
-    if (currentUser?.followers?.length) {
-      followersSet = new Set(currentUser.followers.map((id) => id.toString()));
-    }
-  }
-
-  // Map following and add isCurrentUser & isFollowedByMe
-  const updatedFollowing = following.map((followedUser) => ({
-    ...followedUser,
-    isCurrentUser: currentUserId
-      ? followedUser._id.toString() === currentUserId
-      : false,
-    isFollowedByMe: followersSet.has(followedUser._id.toString()),
+  // Format response
+  const formattedFollowing = following.map((follow) => ({
+    _id: follow._id,
+    profilePicture: follow.profilePicture,
+    username: businessOwnerMap.has(follow._id.toString())
+      ? businessOwnerMap.get(follow._id.toString())
+      : follow.username,
   }));
 
   return res.status(200).json({
     message: "User's following retrieved successfully",
-    following: updatedFollowing,
+    following: formattedFollowing,
   });
 };
 

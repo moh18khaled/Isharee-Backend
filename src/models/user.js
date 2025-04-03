@@ -12,8 +12,13 @@ const userSchema = new mongoose.Schema(
   {
     username: {
       type: String,
-      required: true,
-      unique: true,
+      required: function() {
+        return this.role !== "businessOwner"; // Required for users, optional for business owners
+      },
+      unique: function() {
+        return this.role !== "businessOwner"; // Make unique conditional based on role
+      },
+      sparse: true,
       lowercase: true,
       trim: true,
       minlength: [3, "Username must be at least 3 characters long."],
@@ -21,7 +26,7 @@ const userSchema = new mongoose.Schema(
       match: [/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores."],
 
     },
-    password: {
+    password: { 
       type: String,
       required: true,
       minlength: [8, "Password must be at least 8 characters long."],
