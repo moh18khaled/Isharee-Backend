@@ -13,10 +13,15 @@ const cloudinaryDelete = require("../utils/cloudinaryDelete");
 
 // Add new post
 exports.addPost = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   const user = await validateUser(req, next);
   const userRole = req.user?.role;
 
   if (req.user?.role === "businessOwner") {
+    await session.abortTransaction();
+    session.endSession();
     return next(sendError(403, "isBusinessOwner"));
   }
   const {
@@ -26,25 +31,46 @@ exports.addPost = async (req, res, next) => {
     imagePublicId,
     videoUrl,
     videoPublicId,
+    thumbnailUrl,
+    thumbnailPublicId,
     businessName,
     rating,
     categories,
   } = req.body;
 
-  const image = imageUrl ? { url: imageUrl, public_id: imagePublicId } : null;
+  let image = imageUrl ? { url: imageUrl, public_id: imagePublicId } : null;
   const video = videoUrl ? { url: videoUrl, public_id: videoPublicId } : null;
+  let thumbnail = thumbnailUrl
+    ? { url: thumbnailUrl, public_id: thumbnailPublicId }
+    : null;
 
-  if (!image && !video) return next(sendError(400, "imageOrVideo"));
+  if (!image && !video) {    await session.abortTransaction();
+    session.endSession();
+    return next(sendError(400, "imageOrVideo"));
+  }
+  if (video && !image && !thumbnail){    await session.abortTransaction();
+    session.endSession();
+    return next(sendError(400, "imageOrThumbnail"));
+  }
+  if (image && thumbnail) {
+    await cloudinaryDelete(thumbnailPublicId);
+    thumbnail = null;
+  }
+
+  if (!image) {
+    image = {
+      url: "thumbnail." + thumbnail.url,
+      public_id: thumbnail.public_id,
+    };
+    thumbnail = null;
+  } 
 
   const businessOwner = await BusinessOwner.findOne({
     businessName: { $regex: businessName, $options: "i" },
-  });
+  }).session(session);
 
   // Fetch categories from DB to ensure valid references
-  const categoryDocs = await Category.find({ name: { $in: categories } });
-
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  const categoryDocs = await Category.find({ name: { $in: categories } }).session(session);
 
   // Create the post
   const post = new Post({
@@ -57,7 +83,7 @@ exports.addPost = async (req, res, next) => {
     categories: categoryDocs.map((cat) => cat._id),
     rating,
   });
-
+  console.log(post);
   /* 
     in last version: 
 
@@ -77,6 +103,7 @@ exports.addPost = async (req, res, next) => {
 
   // Add post to each category
   categoryDocs.forEach((category) => category.posts.push(post._id));
+
   await Promise.all([
     post.save({ session }),
     user.save({ session }),
@@ -176,6 +203,17 @@ exports.getPost = async (req, res, next) => {
           select: "businessName profilePicture",
         },
       });
+console.log(post);
+
+// Fetch the category documents from the Category collection
+const categoryDocs = await Category.find({
+  '_id': { $in: post.categories }  // Match categories by their ObjectId
+});
+
+// Map the category documents to an array of category names
+const catNames = categoryDocs.map((category) => category.name);
+console.log(catNames);
+
 
     if (!post) return next(sendError(404, "post"));
 
@@ -183,7 +221,6 @@ exports.getPost = async (req, res, next) => {
 
     let isOwner = false;
     let isLiked = false;
-    let followingSet = new Set();
 
     if (userId) {
       // Fetch user with following list in a single query
@@ -191,10 +228,6 @@ exports.getPost = async (req, res, next) => {
       if (user) {
         isOwner = post.author?._id.toString() === userId.toString();
         isLiked = post.likes.some((like) => like.equals(userId));
-
-        if (user.following) {
-          followingSet = new Set(user.following.map((id) => id.toString()));
-        }
 
         // Mark post as viewed
         await Post.updateOne(
@@ -210,7 +243,6 @@ exports.getPost = async (req, res, next) => {
       isCurrentUser: userId
         ? plainPost.author?._id.toString() === userId
         : false,
-      isFollowed: followingSet.has(plainPost.author?._id?.toString()),
     };
 
     // Add `isCurrentUser` and `isFollowed` to the business owner (if available)
@@ -220,9 +252,6 @@ exports.getPost = async (req, res, next) => {
         isCurrentUser: userId
           ? plainPost.businessOwner.user_id._id.toString() === userId
           : false,
-        isFollowed: followingSet.has(
-          plainPost.businessOwner.user_id?._id?.toString()
-        ),
       };
     }
 
@@ -232,15 +261,15 @@ exports.getPost = async (req, res, next) => {
       user: {
         ...comment.user,
         isCurrentUser: userId ? comment.user._id.toString() === userId : false,
-        isFollowed: followingSet.has(comment.user?._id?.toString()),
       },
     }));
-
+    plainPost.categories = catNames;
+     
     return res.status(200).json({
       message: "Post retrieved successfully",
       post: plainPost,
       isOwner,
-      isLiked,
+      isLiked, 
       likesCount: plainPost.likes.length,
       commentsCount: plainPost.comments.length,
     });
@@ -323,7 +352,7 @@ exports.addPurchaseIntent = async (req, res, next) => {
 exports.updatePost = async (req, res, next) => {
   const user = await validateUser(req, next);
   const post = await validatePost(req, next);
-
+console.log(req.body);
   const {
     title,
     content,
@@ -331,6 +360,8 @@ exports.updatePost = async (req, res, next) => {
     imagePublicId,
     videoUrl,
     videoPublicId,
+    thumbnailUrl,
+    thumbnailPublicId,
     categories,
   } = req.body; // Get updated post data
 
@@ -338,6 +369,28 @@ exports.updatePost = async (req, res, next) => {
   if (post.author.toString() !== user._id.toString()) {
     return next(sendError(403, "notAuthorized"));
   }
+
+  let image = imageUrl ? { url: imageUrl, public_id: imagePublicId } : null;
+  const video = videoUrl ? { url: videoUrl, public_id: videoPublicId } : null;
+  let thumbnail = thumbnailUrl
+    ? { url: thumbnailUrl, public_id: thumbnailPublicId }
+    : null;
+
+
+  if (!image && !video) { 
+    return next(sendError(400, "imageOrVideo"));
+  }
+  if (video && !image && !thumbnail){   
+    return next(sendError(400, "imageOrThumbnail"));
+  }
+  if (image && thumbnail) {
+    await cloudinaryDelete(thumbnailPublicId);
+    thumbnail = null;
+  }
+
+
+
+
 
   // Fetch the categories by name
   const categoryDocs = await Category.find({
@@ -348,8 +401,10 @@ exports.updatePost = async (req, res, next) => {
     if (categoryDocs.length !== categories.length) {
       return next(sendError(400, "invalidCategories"));
     }
-    post.categories = categories;
   }
+
+  post.categories = categoryDocs.map((category) => category._id);
+
 
   // Update the post fields
   post.title = title || post.title;
@@ -392,7 +447,7 @@ exports.toggleLike = async (req, res, next) => {
 
   const alreadyLiked = post.likes.includes(user.id);
 
-  if (alreadyLiked) {
+  if (alreadyLiked) { 
     // Unlike post
     post.likes.pull(user.id);
     user.likedPosts.pull(post._id);
@@ -537,8 +592,8 @@ exports.searchPosts = async (req, res, next) => {
     return next(sendError(400, "searchQuery"));
   }
 
- let categoryIds = [];
- let finalFilter = {};
+  let categoryIds = [];
+  let finalFilter = {};
 
   // Convert category names to IDs if categoryNames exist
   if (categoryNames) {

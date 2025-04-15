@@ -36,10 +36,6 @@ router
   .get(optionalAuth, asyncHandler(postController.getPost)) // Get post by ID
   .patch(
     verifyToken,
-    upload.fields([
-      { name: "image", maxCount: 1 },
-      { name: "video", maxCount: 1 },
-    ]),
     asyncHandler(postController.updatePost)
   )
   .delete(verifyToken, asyncHandler(postController.deletePost)); // Delete a post

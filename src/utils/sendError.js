@@ -28,6 +28,7 @@ const errorMessages = {
     missingCategories:"missing categories",
     InvalidEmail: "Invalid email format",
     alreadyRegisteredYourIntent:"You have already registered your intent for this post",
+    imageOrThumbnail:"You must upload an image or a thumbnail",
   },
   401: {
     default: "Unauthorized. Please log in again.",
