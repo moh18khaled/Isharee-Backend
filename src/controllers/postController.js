@@ -44,11 +44,13 @@ exports.addPost = async (req, res, next) => {
     ? { url: thumbnailUrl, public_id: thumbnailPublicId }
     : null;
 
-  if (!image && !video) {    await session.abortTransaction();
+  if (!image && !video) {
+    await session.abortTransaction();
     session.endSession();
     return next(sendError(400, "imageOrVideo"));
   }
-  if (video && !image && !thumbnail){    await session.abortTransaction();
+  if (video && !image && !thumbnail) {
+    await session.abortTransaction();
     session.endSession();
     return next(sendError(400, "imageOrThumbnail"));
   }
@@ -63,14 +65,16 @@ exports.addPost = async (req, res, next) => {
       public_id: thumbnail.public_id,
     };
     thumbnail = null;
-  } 
+  }
 
   const businessOwner = await BusinessOwner.findOne({
     businessName: { $regex: businessName, $options: "i" },
   }).session(session);
 
   // Fetch categories from DB to ensure valid references
-  const categoryDocs = await Category.find({ name: { $in: categories } }).session(session);
+  const categoryDocs = await Category.find({
+    name: { $in: categories },
+  }).session(session);
 
   // Create the post
   const post = new Post({
@@ -203,17 +207,16 @@ exports.getPost = async (req, res, next) => {
           select: "businessName profilePicture",
         },
       });
-console.log(post);
+    console.log(post);
 
-// Fetch the category documents from the Category collection
-const categoryDocs = await Category.find({
-  '_id': { $in: post.categories }  // Match categories by their ObjectId
-});
+    // Fetch the category documents from the Category collection
+    const categoryDocs = await Category.find({
+      _id: { $in: post.categories }, // Match categories by their ObjectId
+    });
 
-// Map the category documents to an array of category names
-const catNames = categoryDocs.map((category) => category.name);
-console.log(catNames);
-
+    // Map the category documents to an array of category names
+    const catNames = categoryDocs.map((category) => category.name);
+    console.log(catNames);
 
     if (!post) return next(sendError(404, "post"));
 
@@ -264,12 +267,12 @@ console.log(catNames);
       },
     }));
     plainPost.categories = catNames;
-     
+
     return res.status(200).json({
       message: "Post retrieved successfully",
       post: plainPost,
       isOwner,
-      isLiked, 
+      isLiked,
       likesCount: plainPost.likes.length,
       commentsCount: plainPost.comments.length,
     });
@@ -350,9 +353,12 @@ exports.addPurchaseIntent = async (req, res, next) => {
 
 // Modify post
 exports.updatePost = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   const user = await validateUser(req, next);
   const post = await validatePost(req, next);
-console.log(req.body);
+  console.log(req.body);
   const {
     title,
     content,
@@ -362,6 +368,8 @@ console.log(req.body);
     videoPublicId,
     thumbnailUrl,
     thumbnailPublicId,
+    businessName,
+    rating,
     categories,
   } = req.body; // Get updated post data
 
@@ -376,63 +384,99 @@ console.log(req.body);
     ? { url: thumbnailUrl, public_id: thumbnailPublicId }
     : null;
 
-
-  if (!image && !video) { 
+  if (!image && !video) {
     return next(sendError(400, "imageOrVideo"));
   }
-  if (video && !image && !thumbnail){   
+  if (video && !image && !thumbnail) {
     return next(sendError(400, "imageOrThumbnail"));
   }
   if (image && thumbnail) {
     await cloudinaryDelete(thumbnailPublicId);
     thumbnail = null;
   }
-
-
-
-
+  if (!image) {
+    image = {
+      url: "thumbnail." + thumbnail.url,
+      public_id: thumbnail.public_id,
+    };
+    thumbnail = null;
+  }
 
   // Fetch the categories by name
   const categoryDocs = await Category.find({
     name: { $in: categories }, // Look for categories where the name is in the categories array
   });
 
-  if (categories) {
-    if (categoryDocs.length !== categories.length) {
-      return next(sendError(400, "invalidCategories"));
-    }
+  if (categoryDocs.length !== categories.length) {
+    return next(sendError(400, "invalidCategories"));
   }
 
-  post.categories = categoryDocs.map((category) => category._id);
+  const oldCategoryIds = post.categories.map((id) => id.toString());
+  const newCategoryIds = categoryDocs.map((cat) => cat._id.toString());
+
+  // Categories to remove the post from (in old but not in new)
+  const toRemove = oldCategoryIds.filter((id) => !newCategoryIds.includes(id));
+
+  // Categories to add the post to (in new but not in old)
+  const toAdd = newCategoryIds.filter((id) => !oldCategoryIds.includes(id));
+
+  // Remove post from old categories not in the new selection
+  if (toRemove.length > 0) {
+    await Category.updateMany(
+      { _id: { $in: toRemove } },
+      { $pull: { posts: post._id } },
+      { session }
+    );
+  }
+
+  // Add post to new categories not in the old selection
+  if (toAdd.length > 0) {
+    await Category.updateMany(
+      { _id: { $in: toAdd } },
+      { $addToSet: { posts: post._id } },
+      { session }
+    );
+  }
+
+  // Finally, update the post’s categories
+  post.categories = categoryDocs.map(cat => cat._id);
+
+
+  if (post.businessOwner?.businessName != businessName) {
+    // Remove the post reference from BusinessOwner's mentionedPosts
+    await BusinessOwner.updateOne(
+      { businessName: post.businessOwner.businessName },
+      { $pull: { mentionedPosts: post._id } },
+      { session }
+    );
+
+    const newBusinessOwner = await BusinessOwner.findOne({ businessName });
+
+    if (newBusinessOwner) {
+      post.businessOwner = newBusinessOwner._id;
+
+      await BusinessOwner.updateOne(
+        { _id: newBusinessOwner._id },
+        { $addToSet: { mentionedPosts: post._id } },
+        { session }
+      );
+    }
+  }
 
 
   // Update the post fields
   post.title = title || post.title;
   post.content = content || post.content;
-
-  // Handle the image and video uploads if needed (similar to addPost)
-
-  if (imageUrl && imagePublicId) {
-    const oldPublic_id = post.image.public_id;
-
-    post.image.url = imageUrl;
-    post.image.public_id = imagePublicId;
-
-    if (oldPublic_id !== process.env.DEFAULT_PROFILE_PICTURE_PUBLIC_ID) {
-      await cloudinaryDelete(oldPublic_id);
-    }
-  }
-
-  if (videoUrl && videoPublicId) {
-    const oldPublic_id = post.video.public_id;
-
-    post.video.url = videoUrl;
-    post.video.public_id = videoPublicId;
-    await cloudinaryDelete(oldPublic_id);
-  }
+  post.rating = rating;
+  post.image = image;
+  post.video = video;
 
   // Save the updated post
-  await post.save();
+  await post.save({ session });
+
+  // Commit the transaction
+  await session.commitTransaction();
+  session.endSession();
 
   return res.status(200).json({
     message: "Post updated successfully",
@@ -447,7 +491,7 @@ exports.toggleLike = async (req, res, next) => {
 
   const alreadyLiked = post.likes.includes(user.id);
 
-  if (alreadyLiked) { 
+  if (alreadyLiked) {
     // Unlike post
     post.likes.pull(user.id);
     user.likedPosts.pull(post._id);
