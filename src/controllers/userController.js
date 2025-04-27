@@ -167,10 +167,9 @@ exports.confirmPasswordReset = async (req, res, next) => {
   try {
     const { token, newPassword } = req.body;
     // Verify token
-    console.log(token, " ", newPassword);
 
     const decoded = verifyJWT(token); // Extracts { id }
-    console.log(decoded);
+
     if (!decoded) return next(sendError(404, "token"));
 
     // Find user & update password
@@ -227,6 +226,7 @@ exports.login = async (req, res, next) => {
         email: user.email,
         profilePicture: user.profilePicture.url,
         role: user.role,
+        id: user._id,
       },
     },
   });
@@ -236,7 +236,7 @@ exports.login = async (req, res, next) => {
 exports.getUserAccount = async (req, res, next) => {
   const userId = req.user?.id;
   const userRole = req.user?.role;
-
+  //await  createNotification(userId,"your account");
   if (!userId) {
     return next(sendError(404, "user"));
   }
@@ -296,6 +296,32 @@ exports.getUserAccount = async (req, res, next) => {
       mentionedPosts,
       businessDetails,
     },
+  });
+};
+
+// Get user's eWallet
+exports.getUserEwallet = async (req, res, next) => {
+  const userId = req.user?.id;
+
+  if (!userId) {
+    return next(sendError(404, "user"));
+  }
+
+  const user = await User.findById(userId)
+    .select("eWallet")
+    .lean();
+
+  if (!user) return next(sendError(404, "user"));
+
+  const { walletNumber, walletType, amount } = user.eWallet || {};
+
+  return res.status(200).json({
+    success: true,
+      data: {
+        number: walletNumber || null,
+        type: walletType || [],
+        amount: amount || 0,
+      },
   });
 };
 
@@ -708,8 +734,7 @@ exports.getOtherUserAccount = async (req, res, next) => {
       )
       .populate("mentionedPosts", "title content image.url")
       .lean();
-    console.log(user.role, " ", businessOwner.subscriptionActive);
-    console.log(user.email);
+
     if (businessOwner) {
       businessDetails = {
         address: businessOwner.address.country,
@@ -923,7 +948,7 @@ exports.getOtherUserLikedPosts = async (req, res, next) => {
 
   const user = await User.findById(userId);
   if (!user) return next(sendError(404, "user"));
-  console.log(user.likedPosts);
+
   const likedPosts = await Post.find({ _id: { $in: user.likedPosts } }).sort({
     createdAt: -1,
   }); // Sort by latest createdAt (descending)

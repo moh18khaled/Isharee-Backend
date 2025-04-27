@@ -16,7 +16,6 @@ const calculateDashboardMetrics = async (businessOwnerId, next) => {
     .populate('purchaseIntent.user')
     .populate('categories');
 
-    //console.log(posts);
 
   if (!posts?.length) {
     return {

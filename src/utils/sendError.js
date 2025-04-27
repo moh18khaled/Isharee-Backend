@@ -67,6 +67,7 @@ const errorMessages = {
   },
   500: {
     default: "Conflict.",
+    socketError:"Socket.IO is not initialized!",
     hashingError:
       "An error occurred while securing your password. Please try again later.",
     compareError:

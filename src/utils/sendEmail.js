@@ -18,6 +18,6 @@ module.exports = asyncHandler(async (to, subject, text, html) => {
     text,
     html, 
   };
-console.log(mailOptions, " ",process.env.EMAIL, " ", process.env.EMAIL_PASSWORD);
+
   await transporter.sendMail(mailOptions);
 });

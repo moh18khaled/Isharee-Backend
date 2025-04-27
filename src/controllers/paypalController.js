@@ -68,7 +68,6 @@ exports.createOrder = async (req, res, next) => {
     endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)), // 1-month subscription
   });
   await order.save();
-  console.log(order);
 
   res.json({ checkoutUrl: approvalUrl });
 };

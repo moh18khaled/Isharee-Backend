@@ -1,12 +1,10 @@
 const express = require("express");
-const mongoose = require("mongoose");
 const postController = require("../controllers/postController");
 const asyncHandler = require("express-async-handler");
 const verifyToken = require("../middlewares/verifyToken");
 const optionalAuth = require("../middlewares/optionalAuth");
 const validateRequiredFields = require("../middlewares/validateRequiredFields");
 
-const upload = require("../utils/fileUpload");
 
 const router = express.Router();
 
@@ -21,10 +19,7 @@ router
   .route("/")
   .post(
     verifyToken,
-    upload.fields([
-      { name: "image", maxCount: 1 },
-      { name: "video", maxCount: 1 },
-    ]),validateRequiredFields("post"),
+    validateRequiredFields("post"),
     asyncHandler(postController.addPost)
   )
   .get(asyncHandler(postController.getPosts)); // Get all posts sorted by likes
@@ -35,7 +30,7 @@ router
   .route("/:id")
   .get(optionalAuth, asyncHandler(postController.getPost)) // Get post by ID
   .patch(
-    verifyToken,
+    verifyToken,validateRequiredFields("post"),
     asyncHandler(postController.updatePost)
   )
   .delete(verifyToken, asyncHandler(postController.deletePost)); // Delete a post

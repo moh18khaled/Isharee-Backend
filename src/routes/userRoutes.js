@@ -5,7 +5,6 @@ const validateRequiredFields = require("../middlewares/validateRequiredFields");
 const verifyToken = require("../middlewares/verifyToken");
 const optionalAuth = require("../middlewares/optionalAuth");
 const authorizeRoles = require("../middlewares/authorizeRoles");
-const upload = require("../utils/fileUpload");
 
 const router = express.Router();
 
@@ -29,8 +28,11 @@ router.post(
   "/reset-password",
   asyncHandler(userController.requestPasswordReset)
 );
-router.post("/reset-password/confirm", asyncHandler(userController.confirmPasswordReset));
- 
+router.post(
+  "/reset-password/confirm",
+  asyncHandler(userController.confirmPasswordReset)
+);
+
 router.post(
   "/contact",
   validateRequiredFields("emailContent"),
@@ -40,12 +42,12 @@ router.post(
 router
   .route("/account")
   .get(verifyToken, asyncHandler(userController.getUserAccount))
-  .patch(
-    verifyToken,
-    upload.single("profilePicture"),
-    asyncHandler(userController.updateAccount)
-  )
+  .patch(verifyToken, asyncHandler(userController.updateAccount))
   .delete(verifyToken, asyncHandler(userController.deleteAccount));
+
+router
+  .route("/ewallet")
+  .get(verifyToken, asyncHandler(userController.getUserEwallet));
 
 router.patch(
   "/account/password",

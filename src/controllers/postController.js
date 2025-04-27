@@ -4,11 +4,9 @@ const User = require("../models/user");
 const Category = require("../models/category");
 const Comment = require("../models/comments");
 const BusinessOwner = require("../models/businessOwner");
-const fs = require("fs");
 const sendError = require("../utils/sendError");
 const validateUser = require("../utils/validateUser");
 const validatePost = require("../utils/validatePost");
-const cloudinaryUpload = require("../utils/cloudinaryUpload");
 const cloudinaryDelete = require("../utils/cloudinaryDelete");
 
 // Add new post
@@ -87,7 +85,6 @@ exports.addPost = async (req, res, next) => {
     categories: categoryDocs.map((cat) => cat._id),
     rating,
   });
-  console.log(post);
   /* 
     in last version: 
 
@@ -207,7 +204,6 @@ exports.getPost = async (req, res, next) => {
           select: "businessName profilePicture",
         },
       });
-    console.log(post);
 
     // Fetch the category documents from the Category collection
     const categoryDocs = await Category.find({
@@ -216,7 +212,6 @@ exports.getPost = async (req, res, next) => {
 
     // Map the category documents to an array of category names
     const catNames = categoryDocs.map((category) => category.name);
-    console.log(catNames);
 
     if (!post) return next(sendError(404, "post"));
 
@@ -358,7 +353,7 @@ exports.updatePost = async (req, res, next) => {
 
   const user = await validateUser(req, next);
   const post = await validatePost(req, next);
-  console.log(req.body);
+
   const {
     title,
     content,
@@ -371,7 +366,9 @@ exports.updatePost = async (req, res, next) => {
     businessName,
     rating,
     categories,
+    removedMedia,
   } = req.body; // Get updated post data
+  console.log(req.body);
 
   // Ensure the logged-in user is the author of the post
   if (post.author.toString() !== user._id.toString()) {
@@ -439,17 +436,20 @@ exports.updatePost = async (req, res, next) => {
   }
 
   // Finally, update the post’s categories
-  post.categories = categoryDocs.map(cat => cat._id);
+  post.categories = categoryDocs.map((cat) => cat._id);
 
+  const oldBusinessName = post.businessOwner?.businessName;
 
-  if (post.businessOwner?.businessName != businessName) {
-    // Remove the post reference from BusinessOwner's mentionedPosts
-    await BusinessOwner.updateOne(
-      { businessName: post.businessOwner.businessName },
-      { $pull: { mentionedPosts: post._id } },
-      { session }
-    );
-
+  if (oldBusinessName !== businessName) {
+    if (oldBusinessName) {
+      // Remove the post reference from BusinessOwner's mentionedPosts
+      await BusinessOwner.updateOne(
+        { businessName: post.businessOwner.businessName },
+        { $pull: { mentionedPosts: post._id } },
+        { session }
+      );
+    }
+    
     const newBusinessOwner = await BusinessOwner.findOne({ businessName });
 
     if (newBusinessOwner) {
@@ -462,7 +462,6 @@ exports.updatePost = async (req, res, next) => {
       );
     }
   }
-
 
   // Update the post fields
   post.title = title || post.title;

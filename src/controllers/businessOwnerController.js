@@ -2,12 +2,10 @@ const BusinessOwner = require("../models/businessOwner");
 const User = require("../models/user");
 const Category = require("../models/category");
 const mongoose = require("mongoose");
-const generateJWT = require("../utils/generateJWT");
 const sendError = require("../utils/sendError");
 const sendVerificationLink = require("../utils/sendVerificationLink");
 const sendEmail = require("../utils/sendEmail");
 
-const generateAndSetTokens = require("../utils/generateAndSetTokens");
 
 // Get business names with active subscriptions
 exports.getBusinessNames = async (req, res, next) => {
@@ -105,7 +103,6 @@ exports.signup = async (req, res, next) => {
     );
     newCategoryIds = newCategories.map((cat) => cat._id);
   }
-  console.log("ss");
 
 
   // Step 1: Create User
@@ -115,10 +112,8 @@ exports.signup = async (req, res, next) => {
     age,
     role: "businessOwner",
   });
-  console.log(newUser);
 
   await newUser.save({ session });
-  console.log("ssdddq");
 
   // Step 2: Create BusinessOwner
   const newBusinessOwner = new BusinessOwner({

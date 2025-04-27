@@ -15,7 +15,7 @@ const globalError = require("./middlewares/globalError");
 const helmet = require("helmet");
 const compression = require("compression");
 const morgan = require("morgan");
-const { initializeSocket } = require("./utils/socket");
+const { initializeSocket } = require("./utils/initializeSocket");
 const seedCategories = require("./seedCategories");
 dotenv.config();
 

@@ -1,8 +1,12 @@
-const express = require('express');
-const dotenv = require('dotenv');
-const app = require('./src/app');
-const { scheduleDashboardUpdates } = require('./src/utils/scheduleDashboardUpdates');
-const http = require('http'); 
+const express = require("express");
+const dotenv = require("dotenv");
+const app = require("./src/app");
+const { Server } = require("socket.io");
+const {
+  scheduleDashboardUpdates,
+} = require("./src/utils/scheduleDashboardUpdates");
+const { createServer } = require("http");
+const { initializeSocket } = require('./src/utils/initializeSocket');
 
 /*const initializeSocket = require("./src/utils/socket");  // Your socket utility file
 
@@ -17,11 +21,16 @@ dotenv.config();
 
 const PORT = process.env.PORT || 5000;
 
+const httpServer = createServer(app);
+
+
 // Initialize dashboard updates
 scheduleDashboardUpdates();
 
-
 // Start the server
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+httpServer.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
+
+// Initialize Socket.IO
+initializeSocket(httpServer);
