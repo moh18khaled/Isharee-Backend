@@ -242,7 +242,7 @@ exports.getUserAccount = async (req, res, next) => {
   }
 
   const user = await User.findById(userId)
-    .select("username email profilePicture.url")
+    .select("username email eWallet profilePicture.url")
     .lean();
 
   if (!user) return next(sendError(404, "user"));
@@ -281,6 +281,7 @@ exports.getUserAccount = async (req, res, next) => {
       };
     }
   }
+  const { walletNumber, walletType, amount } = user.eWallet || {};
 
   return res.status(200).json({
     success: true,
@@ -295,6 +296,9 @@ exports.getUserAccount = async (req, res, next) => {
       followersCount: counts?.followersCount || 0,
       mentionedPosts,
       businessDetails,
+      walletNumber,
+      walletType,
+      walletAmount:amount,
     },
   });
 };
@@ -307,9 +311,7 @@ exports.getUserEwallet = async (req, res, next) => {
     return next(sendError(404, "user"));
   }
 
-  const user = await User.findById(userId)
-    .select("eWallet")
-    .lean();
+  const user = await User.findById(userId).select("eWallet").lean();
 
   if (!user) return next(sendError(404, "user"));
 
@@ -317,11 +319,11 @@ exports.getUserEwallet = async (req, res, next) => {
 
   return res.status(200).json({
     success: true,
-      data: {
-        number: walletNumber || null,
-        type: walletType || [],
-        amount: amount || 0,
-      },
+    data: {
+      number: walletNumber || null,
+      type: walletType || [],
+      amount: amount || 0,
+    },
   });
 };
 
@@ -810,6 +812,9 @@ exports.getNotifications = async (req, res, next) => {
 exports.markAsRead = async (req, res, next) => {
   const { notificationId } = req.params;
 
+      if (!mongoose.Types.ObjectId.isValid(notificationId))
+        return next(sendError(400, "invalidnotificationId"));
+
   // Find notification and mark as read
   const notification = await Notification.findByIdAndUpdate(
     notificationId,
@@ -865,7 +870,7 @@ exports.getOtherUserFollowers = async (req, res, next) => {
     username: businessOwnerMap.has(follower._id.toString())
       ? businessOwnerMap.get(follower._id.toString())
       : follower.username,
-      isCurrentUser: follower._id.toString() === currentUserId.toString(), // Compare the follower ID with the current user's ID
+    isCurrentUser: follower._id.toString() === currentUserId.toString(), // Compare the follower ID with the current user's ID
   }));
 
   return res.status(200).json({

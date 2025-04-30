@@ -113,7 +113,7 @@ router.get(
 );
 
 router.patch(
-  "notifications/:notificationId",
+  "/notifications/:notificationId",
   verifyToken,
   asyncHandler(userController.markAsRead)
 );

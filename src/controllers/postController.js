@@ -13,7 +13,7 @@ const cloudinaryDelete = require("../utils/cloudinaryDelete");
 exports.addPost = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-
+  try {
   const user = await validateUser(req, next);
   const userRole = req.user?.role;
 
@@ -126,6 +126,11 @@ exports.addPost = async (req, res, next) => {
       rating,
     },
   });
+} catch (err) {
+  await session.abortTransaction();
+  session.endSession();
+  return next(err);
+}
 };
 
 // Get posts about user's interests (home page)
@@ -273,7 +278,7 @@ exports.getPost = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
-  }
+  } 
 };
 
 // Get comments for a specific post
@@ -368,18 +373,19 @@ exports.updatePost = async (req, res, next) => {
     categories,
     removedMedia,
   } = req.body; // Get updated post data
-  console.log(req.body);
+
+  await Promise.all(removedMedia.map(media => cloudinaryDelete(media.publicId)));
 
   // Ensure the logged-in user is the author of the post
   if (post.author.toString() !== user._id.toString()) {
     return next(sendError(403, "notAuthorized"));
   }
-
+ 
   let image = imageUrl ? { url: imageUrl, public_id: imagePublicId } : null;
   const video = videoUrl ? { url: videoUrl, public_id: videoPublicId } : null;
   let thumbnail = thumbnailUrl
     ? { url: thumbnailUrl, public_id: thumbnailPublicId }
-    : null;
+    : null; 
 
   if (!image && !video) {
     return next(sendError(400, "imageOrVideo"));
@@ -392,12 +398,14 @@ exports.updatePost = async (req, res, next) => {
     thumbnail = null;
   }
   if (!image) {
+    const { url, public_id } = thumbnail;
     image = {
-      url: "thumbnail." + thumbnail.url,
-      public_id: thumbnail.public_id,
+      url: url.startsWith("thumbnail.") ? url : "thumbnail." + url,
+      public_id,
     };
     thumbnail = null;
   }
+  
 
   // Fetch the categories by name
   const categoryDocs = await Category.find({

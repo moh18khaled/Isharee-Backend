@@ -10,6 +10,7 @@ const errorMessages = {
     invalidId: "Invalid ID format.",
     invalidUserId: "Invalid user ID.",
     invalidPostId: "Invalid post ID.",
+    invalidnotificationId:"Invalid notification ID",
     imageRequired: "Image is required.",
     postIsLiked: "Post is already liked",
     postIsUnLiked: "Post is already unliked",
