@@ -16,6 +16,9 @@ const generateJWT = require("../utils/generateJWT");
 const verifyJWT = require("../utils/verifyJWT");
 const validator = require("validator");
 const sendEmail = require("../utils/sendEmail");
+const { OAuth2Client } = require("google-auth-library");
+const verifyGoogleToken = require("../utils/verifyGoogleToken");
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID); // Add this
 const createNotification = require("../utils/createNotification");
 
 // Get signup data
@@ -61,13 +64,18 @@ exports.signup = async (req, res, next) => {
     walletTypes,
     interests,
     heardAboutUs,
+    authProvider = "local", // Default to local if not provided
   } = req.body;
 
-  const oldUser = await User.findOne({
-    $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }],
-  }).lean();
+  const emailLower = email?.toLowerCase();
+  const usernameLower = username?.toLowerCase();
 
-  if (oldUser) return next(sendError(409, "userExists"));
+  const oldUser = await User.findOne({
+    $or: [{ email: emailLower }, { username: usernameLower }],
+  });
+
+  if (oldUser && authProvider === "local")
+    return next(sendError(409, "userExists"));
 
   // Validate heardAboutUs (must be within predefined values)
   /* const validSources = [
@@ -89,31 +97,76 @@ exports.signup = async (req, res, next) => {
   });
   if (walletNumber && existingUser) return next(sendError(400, "WalletNumber"));
 
-  const newUser = new User({
-    username,
-    email,
+  let user;
+
+  if (authProvider !== "local") {
+    if (!oldUser) {
+      return next(sendError(400, "Google user must sign in first"));
+    }
+
+    // Only allow filling in the rest if it's a Google user
+    if (oldUser.authProvider !== "google") {
+      return next(sendError(400, "User is not a Google user"));
+    }
+
+    // Update Google user with the additional info
+    oldUser.username = usernameLower;
+    oldUser.age = age;
+    oldUser.interests = interests;
+    oldUser.heardAboutUs = heardAboutUs;
+    oldUser.eWallet = {
+      walletNumber: walletNumber || undefined,
+      walletType: walletTypes || [],
+    };
+
+    await oldUser.save();
+    user = oldUser;
+
+    await generateAndSetTokens(user, res);
+
+    return res.status(200).json({
+      message: "Google user profile completed successfully.",
+      data: {
+        username: user.username,
+        email: user.email,
+        age: user.age,
+        role: user.role,
+        interests: user.interests,
+        heardAboutUs: user.heardAboutUs,
+        profilePicture: user.profilePicture.url,
+        role: user.role,
+        id: user._id,
+      },
+    });
+  }
+
+  // Local signup
+  user = new User({
+    username: usernameLower,
+    email: emailLower,
+    password,
     age,
-    password, // Hashed automatically by the pre-save hook
+    authProvider,
     interests,
     heardAboutUs,
     eWallet: {
-      walletNumber: walletNumber, // Allow nullable wallet number
-      walletType: walletTypes, // Array of wallet types
+      walletNumber: walletNumber || undefined,
+      walletType: walletTypes || [],
     },
   });
 
-  await newUser.save();
-
-  await sendVerificationLink(email, newUser.id);
+  await user.save();
+  await sendVerificationLink(emailLower, user._id);
 
   return res.status(201).json({
     message: "User registered! Please verify your email.",
     data: {
-      username,
-      email,
-      age,
-      interests,
-      heardAboutUs,
+      username: user.username,
+      email: user.email,
+      age: user.age,
+      role: user.role,
+      interests: user.interests,
+      heardAboutUs: user.heardAboutUs,
     },
   });
 };
@@ -200,7 +253,40 @@ exports.login = async (req, res, next) => {
     });
   }
 
-  const { email, password } = req.body;
+  const { email, password, provider, googleToken } = req.body;
+
+  if (provider === "google") {
+    if (!googleToken) return next(sendError(400, "missingGoogleToken"));
+
+    try {
+      // Validate Google Token
+      const googleUser = await verifyGoogleToken(googleToken);
+
+      // Check if user exists based on email from Google
+      const user = await User.findOne({ email: googleUser.email });
+
+      if (!user) return next(sendError(404, "user"));
+
+      // Generate and set tokens after login
+      await generateAndSetTokens(user, res);
+
+      return res.status(200).json({
+        message: "User successfully logged in",
+        data: {
+          user: {
+            username: user.username,
+            email: user.email,
+            profilePicture: user.profilePicture.url,
+            role: user.role,
+            id: user._id,
+          },
+        },
+      });
+    } catch (err) {
+      console.log(err);
+      return next(sendError(500, "googleLoginError"));
+    }
+  }
 
   if (!email || !password) return next(sendError(400, "missingFields"));
 
@@ -298,7 +384,7 @@ exports.getUserAccount = async (req, res, next) => {
       businessDetails,
       walletNumber,
       walletType,
-      walletAmount:amount,
+      walletAmount: amount,
     },
   });
 };
@@ -812,8 +898,8 @@ exports.getNotifications = async (req, res, next) => {
 exports.markAsRead = async (req, res, next) => {
   const { notificationId } = req.params;
 
-      if (!mongoose.Types.ObjectId.isValid(notificationId))
-        return next(sendError(400, "invalidnotificationId"));
+  if (!mongoose.Types.ObjectId.isValid(notificationId))
+    return next(sendError(400, "invalidnotificationId"));
 
   // Find notification and mark as read
   const notification = await Notification.findByIdAndUpdate(

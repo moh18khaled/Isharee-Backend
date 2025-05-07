@@ -9,6 +9,7 @@ const validateRequiredFields = require("../middlewares/validateRequiredFields");
 const router = express.Router();
 
 router.get("/interests", verifyToken, asyncHandler(postController.getPostsByInterests)); // Return Posts based on interests
+router.get("/brands", asyncHandler(postController.getPostsByBrands)); // Return Posts based on interests
 router.post("/purchase-intent", verifyToken, asyncHandler(postController.addPurchaseIntent)); 
 
 // Search for posts

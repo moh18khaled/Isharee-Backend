@@ -28,20 +28,24 @@ const userSchema = new mongoose.Schema(
     },
     password: { 
       type: String,
-      required: true,
+      required: function () {
+        return this.authProvider === "local";
+      },
       minlength: [8, "Password must be at least 8 characters long."],
       validate: {
-        validator: (value) =>
-          validator.isStrongPassword(value, {
+        validator: function (value) {
+          if (this.authProvider !== "local") return true; // skip validation
+          return validator.isStrongPassword(value, {
             minLength: 8,
             minLowercase: 1,
             minUppercase: 1,
             minNumbers: 1,
             minSymbols: 1,
-          }),
+          });
+        },
         message:
           "Password must contain at least one lowercase, one uppercase, one number, and one special character.",
-      },
+      }      
     },
     email: {
       type: String,
@@ -54,7 +58,33 @@ const userSchema = new mongoose.Schema(
         message: "Please provide a valid email address.",
       },
     },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true, // allows multiple nulls
+    },    
     isVerified: { type: Boolean, default: false },
+    isPhoneVerified: {
+      type: Boolean,
+      default: false,
+    },
+    authProvider: {
+      type: String,
+      enum: ["local", "google", "phone"],
+      default: "local",
+    },
+    phoneNumber: {
+      type: String,
+      unique: true,
+      sparse: true, // allows multiple nulls
+      trim: true,
+      validate: {
+        validator: function (v) {
+          return !v || /^\+?[1-9]\d{1,14}$/.test(v); // Optional + E.164 format
+        },
+        message: props => `${props.value} is not a valid phone number!`,
+      },
+    },
     age: { type: Number, required: true },
     ageGroup: {
       // The added age group field
@@ -188,6 +218,7 @@ userSchema.pre("save", async function (next) {
 
 // Method to compare passwords
 userSchema.methods.comparePassword = async function (password) {
+  if (!this.password) return false; // Prevent crash for OAuth users
   return await bcrypt.compare(password, this.password);
 };
 

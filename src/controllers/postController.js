@@ -164,6 +164,35 @@ exports.getPostsByInterests = async (req, res, next) => {
   });
 };
 
+// Get most by brand 
+exports.getPostsByBrands = async (req, res, next) => {
+  const {brand} = req.query;
+  console.log(brand);
+  //const businessOwner = await BusinessOwner.find({ businessName: { $in: brandName } });
+
+
+
+  const businessOwner = await BusinessOwner.findOne({ businessName: brand  })
+  .select("mentionedPosts")
+  .populate("mentionedPosts", "title content image.url")
+  .lean();
+  console.log(businessOwner);
+  
+  const posts = businessOwner?.mentionedPosts || [];
+
+  if (!posts.length) {
+    return res.status(200).json({
+      message: "No posts found.",
+      posts: [],
+    });
+  }
+
+  return res.status(200).json({
+    message: "Posts retrieved successfully",
+    posts: posts,
+  });
+};
+
 // Get most liked posts (home page)
 exports.getPosts = async (req, res, next) => {
   // Fetch all posts, sorted by createdAt (descending)

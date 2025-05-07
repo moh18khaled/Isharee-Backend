@@ -11,6 +11,7 @@ const errorMessages = {
     invalidUserId: "Invalid user ID.",
     invalidPostId: "Invalid post ID.",
     invalidnotificationId:"Invalid notification ID",
+    missingGoogleToken:"Missing google token",
     imageRequired: "Image is required.",
     postIsLiked: "Post is already liked",
     postIsUnLiked: "Post is already unliked",
@@ -30,6 +31,7 @@ const errorMessages = {
     InvalidEmail: "Invalid email format",
     alreadyRegisteredYourIntent:"You have already registered your intent for this post",
     imageOrThumbnail:"You must upload an image or a thumbnail",
+    missingGoogleCredentials:"Missing google credentials",
   },
   401: {
     default: "Unauthorized. Please log in again.",
@@ -74,6 +76,7 @@ const errorMessages = {
     compareError:
       "An error occurred while verifying your password. Please try again later.",
       emailSendFailed:"Email send failed",
+      googleLoginError:"Google login failed",
   },
 
   default: "An error occurred.",

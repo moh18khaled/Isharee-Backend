@@ -1,35 +1,37 @@
 const sendError = require("../utils/sendError");
 
-// Define the required fields for each entity.
 const requiredFieldsByEntity = {
-  user: ["username", "email", "password", "age", "interests", "heardAboutUs"],
-  businessOwner: [
-    "email",
-    "password",
-    "age",
-    "businessName",
-    "categories",
-    "address",
-    "phoneNumber",
-  ],
+  user: {
+    local: ["username", "email", "password", "age", "interests", "heardAboutUs"],
+    google: ["username", "age", "interests", "heardAboutUs"], // no password
+  },
+
+  businessOwner: {
+    local: ["email", "password", "age", "businessName", "categories", "address", "phoneNumber"],
+    google: ["age", "businessName", "categories", "address", "phoneNumber"], // no password
+  },
   post: ["title", "content", "businessName", "rating", "categories"],
   emailContent: ["name", "email", "subject", "message"],
 };
 
-/**
- * Middleware factory: Returns a middleware that validates required fields for a given entity.
- */
 const validateRequiredFields = (entityType) => {
   return (req, res, next) => {
-console.log(req.body);
-    const requiredFields = requiredFieldsByEntity[entityType];
+    const body = req.body;
+console.log(body);
+    let requiredFields;
 
-    // Check for missing fields
+    if (entityType === "user" || entityType === "businessOwner") {
+      const provider = body.authProvider || "local";
+      requiredFields = requiredFieldsByEntity[entityType][provider];
+    } else {
+      requiredFields = requiredFieldsByEntity[entityType];
+    }
+
     const missingFields = requiredFields.filter((field) => {
-      const value = req.body[field];
+      const value = body[field];
 
       if (field === "interests") {
-        return !Array.isArray(value) || value.length === 0; // Ensure it's an array and not empty
+        return !Array.isArray(value) || value.length === 0;
       }
 
       return value === undefined || value === null || value === "";

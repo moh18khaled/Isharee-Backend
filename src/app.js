@@ -6,6 +6,7 @@ const businessOwnerRoutes = require("./routes/businessOwnerRoutes");
 const postRoutes = require("./routes/postRoutes");
 const paymentsRouter = require("./routes/paymentsRouter");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const authRoutes = require("./routes/authRoutes");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const AppError = require("./utils/AppError");
@@ -15,6 +16,8 @@ const globalError = require("./middlewares/globalError");
 const helmet = require("helmet");
 const compression = require("compression");
 const morgan = require("morgan");
+const passport = require('passport');
+require('./config/passport'); 
 const { initializeSocket } = require("./utils/initializeSocket");
 const seedCategories = require("./seedCategories");
 dotenv.config();
@@ -49,6 +52,7 @@ app.use(
   })
 );
 
+
 // Middleware
 app.use(morgan("dev"));
 app.use(express.urlencoded({ extended: false }));
@@ -67,25 +71,35 @@ app.use(
   helmet.contentSecurityPolicy({
     directives: {
       "default-src": ["'self'"],
-      "img-src": ["*"], // Allows images from any source
+      "script-src": [
+        "'self'",
+        "https://accounts.google.com",
+        "https://cdn.jsdelivr.net", // If you're using any other CDN
+      ],
+      "frame-src": ["https://accounts.google.com"],
+      "img-src": ["*"],
       "connect-src": [
         "'self'",
         "https://isharee-backend-production.up.railway.app",
         "https://api.cloudinary.com",
-      ], // Allow backend API requests
+      ],
     },
   })
 );
+
 // MongoDB Connection
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => console.log("Connected to MongoDB"))
   .catch((err) => console.error("Failed to connect to MongoDB:", err.message));
 
-// For static uploads (images, etc.)
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+
+// Initialize Passport
+app.use(passport.initialize());
 
 // Use API routes BEFORE serving frontend
+app.use("/auth", authRoutes);
 app.use("/user", userRoutes);
 app.use("/businessOwner", businessOwnerRoutes);
 app.use("/postss", postRoutes);

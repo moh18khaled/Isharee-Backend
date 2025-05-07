@@ -20,7 +20,7 @@ exports.getBusinessNames = async (req, res, next) => {
     businessNames, // Return as an array of strings
   });
 };
-
+ 
 exports.getSignupData = async (req, res, next) => {
   try {
     const categories = await Category.find({}, "name").lean(); // Fetch available categories
@@ -44,102 +44,120 @@ exports.signup = async (req, res, next) => {
     phoneNumber,
     description,
     websiteUrl,
+    authProvider = "local", // Default to local if not provided
   } = req.body;
- 
-  // Start a database transaction
+
   const session = await mongoose.startSession();
- 
   session.startTransaction();
 
-  const oldUser = await User.findOne({ email: email.toLowerCase() }).session(
-    session
-  );
-  const oldBusinessOwner = await BusinessOwner.findOne({
-    businessName: businessName.toLowerCase(),
-  }).session(session);
-  if (oldBusinessOwner || oldUser) {
-    await session.abortTransaction();
-    session.endSession();
-    return next(sendError(409, "businessOwnerExists"));
-  }
-  /*
-  // Step 1: Validate all categories exist
-  const existingCategories = await Category.find({
-    name: { $in: categories },
-  }).session(session);
-  const existingCategoryNames = existingCategories.map((cat) => cat.name);
+  try {
+    const emailLower = email.toLowerCase();
+    const businessNameLower = businessName.toLowerCase();
 
-  const missingCategories = categories.filter(
-    (cat) => !existingCategoryNames.includes(cat)
-  );
+    const oldUser = await User.findOne({ email: emailLower }).session(session);
+    const oldBusinessOwner = await BusinessOwner.findOne({
+      businessName: businessNameLower,
+    }).session(session);
 
-  if (missingCategories.length > 0) {
-    await session.abortTransaction();
-    session.endSession();
-    return next(sendError(400, "missingCategories"));
-  }
+    if (oldBusinessOwner || (oldUser && authProvider === "local")) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(sendError(409, "businessOwnerExists"));
+    }
 
-  */
+    // Find or create categories
+    const existingCategories = await Category.find({
+      name: { $in: categories },
+    }).session(session);
+    const existingCategoryNames = existingCategories.map((cat) => cat.name);
+    const existingCategoryIds = existingCategories.map((cat) => cat._id);
 
-  // Step 2: Find existing categories from DB
-  const existingCategories = await Category.find({
-    name: { $in: categories },
-  }).session(session);
-
-  const existingCategoryNames = existingCategories.map((cat) => cat.name);
-  const existingCategoryIds = existingCategories.map((cat) => cat._id);
-
-  // Step 3: Identify new categories that need to be created
-  const newCategoriesToCreate = categories.filter(
-    (cat) => !existingCategoryNames.includes(cat)
-  );
-
-  let newCategoryIds = [];
-  if (newCategoriesToCreate.length > 0) {
-    // Step 4: Create new categories and get their IDs
-    const newCategories = await Category.insertMany(
-      newCategoriesToCreate.map((cat) => ({ name: cat })),
-      { session }
+    const newCategoriesToCreate = categories.filter(
+      (cat) => !existingCategoryNames.includes(cat)
     );
-    newCategoryIds = newCategories.map((cat) => cat._id);
-  }
 
+    let newCategoryIds = [];
+    if (newCategoriesToCreate.length > 0) {
+      const newCategories = await Category.insertMany(
+        newCategoriesToCreate.map((cat) => ({ name: cat })),
+        { session }
+      );
+      newCategoryIds = newCategories.map((cat) => cat._id);
+    }
+    let newUser;
 
-  // Step 1: Create User
-  const newUser = new User({
-    email,
-    password,
-    age,
-    role: "businessOwner",
-  });
-
-  await newUser.save({ session });
-
-  // Step 2: Create BusinessOwner
-  const newBusinessOwner = new BusinessOwner({
-    user_id: newUser._id,
-    businessName,
-    categories: [...existingCategoryIds, ...newCategoryIds], // Only what user picked
-    address,
-    phoneNumber,
-    description,
-    websiteUrl,
-  });
-  await newBusinessOwner.save({ session });
-
-  // Commit the transaction
-  await session.commitTransaction();
-  session.endSession();
-
-  await sendVerificationLink(email, newUser.id);
-
-  res.status(201).json({
-    message: "Business owner registered! Please verify your email.",
-    user: { id: newUser._id },
-    businessOwner: {
-      id: newBusinessOwner._id,
-      businessName: newBusinessOwner.businessName,
+    if (authProvider !== "local") {
+      // Google signup
+      newUser = oldUser;
+      if (!newUser) {
+        newUser = new User({
+          email: emailLower,
+          age,
+          authProvider,
+          isVerified: true, // auto-verify Google users
+        });
+      }
+    } else {
+      // Local signup
+      newUser = new User({
+        email: emailLower,
+        password,
+        age,
+        authProvider,
+      });
+    }
+    
+    // Ensure the role is businessOwner
+    if (!newUser.role || newUser.role !== "businessOwner") {
+      newUser.role = "businessOwner";
+    }
+    
+    // Save only if it's a new user or role was just updated
+    if (newUser.isNew || newUser.isModified("role")) {
+      await newUser.save({ session });
+    }
+    
+    
+    const newBusinessOwner = new BusinessOwner({
+      user_id: newUser._id,
+      businessName,
+      categories: [...existingCategoryIds, ...newCategoryIds],
+      address,
+      phoneNumber,
+      description,
       websiteUrl,
-    },
-  });
+    });
+    await newBusinessOwner.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    if (authProvider === "local") {
+      await sendVerificationLink(emailLower, newUser.id);
+    }
+
+    return res.status(201).json({
+      message:
+        authProvider === "local"
+          ? "Business owner registered! Please verify your email."
+          : "Google business owner registered successfully.",
+      user: {
+        username: newUser.username,
+        email: newUser.email,
+        profilePicture: newUser.profilePicture.url,
+        role: newUser.role,
+        id: newUser._id,
+      },
+      businessOwner: {
+        id: newBusinessOwner._id,
+        businessName: newBusinessOwner.businessName,
+        websiteUrl,
+      },
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    return next(err);
+  }
 };
+ 
