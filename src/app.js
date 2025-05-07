@@ -75,6 +75,7 @@ app.use(
         "'self'",
         "https://accounts.google.com",
         "https://cdn.jsdelivr.net", // If you're using any other CDN
+        "https://cdn.socket.io",
       ],
       "frame-src": ["https://accounts.google.com"],
       "img-src": ["*"],
