@@ -155,7 +155,12 @@ exports.signup = async (req, res, next) => {
       },
     });
   } catch (err) {
-    await session.abortTransaction();
+    try {
+      await session.abortTransaction();
+    } catch (e) {
+      // Optional: log warning if abort fails (usually safe to ignore)
+      console.warn("Abort failed or already committed.");
+    }
     session.endSession();
     return next(err);
   }

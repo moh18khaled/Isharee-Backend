@@ -99,7 +99,7 @@ exports.signup = async (req, res, next) => {
 
   let user;
 
-  if (authProvider !== "local") {
+  if (authProvider === "google") {
     if (!oldUser) {
       return next(sendError(400, "Google user must sign in first"));
     }
