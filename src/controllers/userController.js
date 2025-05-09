@@ -124,7 +124,7 @@ exports.signup = async (req, res, next) => {
 
     await generateAndSetTokens(user, res);
 
-    return res.status(200).json({
+    return res.status(201).json({
       message: "Google user profile completed successfully.",
       data: {
         username: user.username,

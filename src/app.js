@@ -81,7 +81,7 @@ app.use(
       "img-src": ["*"],
       "connect-src": [
         "'self'",
-        "https://isharee-backend-production.up.railway.app",
+        "https://isharee-backend-production.up.railway.app", 
         "https://api.cloudinary.com",
       ],
     },
