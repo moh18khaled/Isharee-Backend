@@ -35,6 +35,7 @@ const allowedOrigins = [
   "http://localhost:5000",
   "http://localhost:5173", // Local development
   "https://isharee-backend-production.up.railway.app", // Deployed frontend
+  "https://isharee-backend.onrender.com",
 ];
 
 app.use(
@@ -83,6 +84,7 @@ app.use(
         "'self'",
         "https://isharee-backend-production.up.railway.app", 
         "https://api.cloudinary.com",
+        "https://isharee-backend.onrender.com",
       ],
     },
   })
