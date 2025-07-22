@@ -20,7 +20,7 @@ initializeSocket(server);
 dotenv.config();
 
 const PORT = process.env.PORT || 5000;
-
+const HOST = '0.0.0.0';
 const httpServer = createServer(app);
 
 
@@ -28,7 +28,7 @@ const httpServer = createServer(app);
 scheduleDashboardUpdates();
 
 // Start the server
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT,HOST, () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
